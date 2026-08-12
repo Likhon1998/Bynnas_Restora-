@@ -1,7 +1,12 @@
 import { ArrowRight, CalendarDays, Clock3, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { getSiteSettings } from '../../data/siteSettings';
 import Reveal from '../ui/Reveal';
 
 export default function BookingBar() {
+    const settings = getSiteSettings();
+    if (settings.reservations_enabled === false) return null;
+
     return (
         <section id="reservations" className="relative z-20 -mt-10 sm:-mt-12">
             <div className="site-container">
@@ -52,13 +57,13 @@ export default function BookingBar() {
                             </select>
                         </label>
 
-                        <button
-                            type="button"
+                        <Link
+                            to="/reservations"
                             className="btn-primary h-[42px] w-full whitespace-nowrap sm:w-auto lg:self-end"
                         >
                             Find a Table
                             <ArrowRight className="h-4 w-4" />
-                        </button>
+                        </Link>
                     </div>
                 </Reveal>
             </div>

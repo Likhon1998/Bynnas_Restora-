@@ -1,7 +1,8 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChefHat, ChevronLeft, ChevronRight, Heart, Star } from 'lucide-react';
-import { images } from '../../data/homeStatic';
+import { useCart } from '../../context/CartContext';
+import { formatMoney, getSiteSettings } from '../../data/siteSettings';
 import Reveal from '../ui/Reveal';
 
 const badgeStyles = {
@@ -9,10 +10,35 @@ const badgeStyles = {
     red: 'bg-red-600 text-white',
     orange: 'bg-ember text-white',
     gold: 'bg-gold text-ink',
+    blue: 'bg-sky-600 text-white',
 };
 
 export default function PopularDishes() {
+    const settings = getSiteSettings();
+    const { addItem, orderingEnabled } = useCart();
     const scrollerRef = useRef(null);
+    const [dishes, setDishes] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/web/menu/featured');
+                if (!res.ok) throw new Error('Failed to load featured menu');
+                const data = await res.json();
+                if (!cancelled) setDishes(Array.isArray(data.items) ? data.items : []);
+            } catch {
+                if (!cancelled) setDishes([]);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const scrollBy = (dir) => scrollerRef.current?.scrollBy({ left: dir * 300, behavior: 'smooth' });
 
     return (
@@ -22,14 +48,13 @@ export default function PopularDishes() {
                     <Reveal>
                         <div className="lg:sticky lg:top-24">
                             <p className="font-script text-[1.5rem] leading-none text-ember">
-                                Our Specialties
+                                {settings.popular_eyebrow}
                             </p>
                             <h2 className="font-display mt-1.5 text-3xl font-semibold text-ink md:text-4xl">
-                                Popular Dishes
+                                {settings.popular_title}
                             </h2>
                             <p className="mt-3 text-[13px] leading-6 text-muted">
-                                Signature plates guests love most — crafted fresh daily with bold
-                                flavor and beautiful presentation.
+                                {settings.popular_subtitle}
                             </p>
                             <Link
                                 to="/menu"
@@ -65,7 +90,16 @@ export default function PopularDishes() {
                             ref={scrollerRef}
                             className="no-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto pb-2 xl:grid xl:grid-cols-4 xl:overflow-visible"
                         >
-                            {images.dishes.map((dish, i) => (
+                            {loading && dishes.length === 0 ? (
+                                <p className="text-sm text-muted">Loading popular dishes…</p>
+                            ) : null}
+                            {!loading && dishes.length === 0 ? (
+                                <p className="text-sm text-muted">
+                                    No featured dishes yet. Mark menu items as “Show on homepage” in
+                                    admin.
+                                </p>
+                            ) : null}
+                            {dishes.map((dish, i) => (
                                 <Reveal
                                     key={dish.id}
                                     delay={70 + i * 60}
@@ -79,11 +113,13 @@ export default function PopularDishes() {
                                                 className="h-full w-full object-cover"
                                                 loading="lazy"
                                             />
-                                            <span
-                                                className={`absolute top-3 left-3 rounded-full px-2.5 py-1 text-[11px] font-semibold ${badgeStyles[dish.badgeTone]}`}
-                                            >
-                                                {dish.badge}
-                                            </span>
+                                            {dish.badge ? (
+                                                <span
+                                                    className={`absolute top-3 left-3 rounded-full px-2.5 py-1 text-[11px] font-semibold ${badgeStyles[dish.badgeTone] || badgeStyles.green}`}
+                                                >
+                                                    {dish.badge}
+                                                </span>
+                                            ) : null}
                                             <button
                                                 type="button"
                                                 aria-label={`Save ${dish.name}`}
@@ -99,7 +135,7 @@ export default function PopularDishes() {
                                             <div className="mt-auto flex items-end justify-between gap-2 pt-3">
                                                 <div>
                                                     <p className="font-semibold text-ember">
-                                                        {dish.price}
+                                                        {formatMoney(dish.price, settings)}
                                                     </p>
                                                     <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted">
                                                         <Star className="h-3.5 w-3.5 fill-gold text-gold" />
@@ -108,8 +144,10 @@ export default function PopularDishes() {
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    aria-label={`Order ${dish.name}`}
-                                                    className="flex h-10 w-10 items-center justify-center rounded-md bg-ember text-white hover:bg-ember-deep"
+                                                    disabled={!orderingEnabled}
+                                                    aria-label={`Add ${dish.name} to cart`}
+                                                    onClick={() => addItem(dish)}
+                                                    className="flex h-10 w-10 items-center justify-center rounded-md bg-ember text-white hover:bg-ember-deep disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
                                                     <ChefHat className="h-4 w-4" />
                                                 </button>

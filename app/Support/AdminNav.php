@@ -69,15 +69,15 @@ class AdminNav
                 ['label' => 'Wastage & Variance', 'icon' => 'wastage', 'route' => 'admin.wastage.index', 'key' => 'wastage'],
             ]],
             ['section' => 'Finance', 'items' => [
-                ['label' => 'Accounting', 'icon' => 'accounting', 'route' => null, 'key' => 'accounting'],
-                ['label' => 'Reports', 'icon' => 'reports', 'route' => null, 'key' => 'reports'],
-                ['label' => 'Expenses', 'icon' => 'expenses', 'route' => null, 'key' => 'expenses'],
-                ['label' => 'Tax Management', 'icon' => 'tax', 'route' => null, 'key' => 'tax'],
+                ['label' => 'Accounting', 'icon' => 'accounting', 'route' => 'admin.accounting.index', 'key' => 'accounting'],
+                ['label' => 'Reports', 'icon' => 'reports', 'route' => 'admin.reports.index', 'key' => 'reports'],
+                ['label' => 'Expenses', 'icon' => 'expenses', 'route' => 'admin.expenses.index', 'key' => 'expenses'],
+                ['label' => 'Tax Management', 'icon' => 'tax', 'route' => 'admin.tax.index', 'key' => 'tax'],
             ]],
             ['section' => 'Staff & Settings', 'items' => [
-                ['label' => 'Staff Management', 'icon' => 'staff', 'route' => null, 'key' => 'staff'],
-                ['label' => 'Roles & Permissions', 'icon' => 'roles', 'route' => null, 'key' => 'roles'],
-                ['label' => 'Settings', 'icon' => 'settings', 'route' => null, 'key' => 'settings'],
+                ['label' => 'Staff Management', 'icon' => 'staff', 'route' => 'admin.staff.index', 'key' => 'staff'],
+                ['label' => 'Roles & Permissions', 'icon' => 'roles', 'route' => 'admin.roles.index', 'key' => 'roles'],
+                ['label' => 'Settings', 'icon' => 'settings', 'route' => 'admin.settings.edit', 'key' => 'settings'],
             ]],
         ];
     }

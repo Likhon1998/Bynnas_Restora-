@@ -58,7 +58,7 @@ export default function BlogPage() {
 
     return (
         <div className="min-h-screen bg-[#f7f4ef]">
-            <Navbar cartCount={1} />
+            <Navbar />
 
             {/* Hero */}
             <section className="relative overflow-hidden bg-[#0d0d0d] text-white">

@@ -179,9 +179,9 @@
                             @php $r=22; $c=2*3.1416*$r; $off=$c-($s['pct']/100)*$c; @endphp
                             <div class="ring">
                                 <svg width="64" height="64" viewBox="0 0 64 64">
-                                    <circle cx="32" cy="32" r="{{ $r }}" stroke="rgba(255,255,255,0.08)" stroke-width="5" fill="none"/>
-                                    <circle cx="32" cy="32" r="{{ $r }}" stroke="#e0a84a" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="{{ $c }}" stroke-dashoffset="{{ $off }}" transform="rotate(-90 32 32)"/>
-                                    <text x="32" y="36" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">{{ $s['pct'] }}%</text>
+                                    <circle cx="32" cy="32" r="{{ $r }}" stroke="rgba(15,23,42,0.1)" stroke-width="5" fill="none"/>
+                                    <circle cx="32" cy="32" r="{{ $r }}" stroke="#c47a25" stroke-width="5" fill="none" stroke-linecap="round" stroke-dasharray="{{ $c }}" stroke-dashoffset="{{ $off }}" transform="rotate(-90 32 32)"/>
+                                    <text x="32" y="36" text-anchor="middle" fill="#0f172a" font-size="11" font-weight="700">{{ $s['pct'] }}%</text>
                                 </svg>
                                 <p>{{ $s['label'] }}</p>
                                 <strong>{{ $s['value'] }}</strong>
@@ -213,11 +213,11 @@
                         @foreach ($recentActivities as $a)
                             @php
                                 $color = match($a['tone']) {
-                                    'green' => '#34d399',
-                                    'red' => '#f87171',
-                                    'blue' => '#60a5fa',
-                                    'purple' => '#c084fc',
-                                    default => '#fb923c',
+                                    'green' => '#059669',
+                                    'red' => '#dc2626',
+                                    'blue' => '#2563eb',
+                                    'purple' => '#7c3aed',
+                                    default => '#ea580c',
                                 };
                             @endphp
                             <li>
@@ -247,12 +247,12 @@
             labels: labels,
             datasets: [{
                 data: values,
-                borderColor: '#e0a84a',
-                backgroundColor: 'rgba(224,168,74,0.15)',
+                borderColor: '#c47a25',
+                backgroundColor: 'rgba(196,122,37,0.12)',
                 borderWidth: 3,
                 pointRadius: 4,
-                pointBackgroundColor: '#e0a84a',
-                pointBorderColor: '#0b0f17',
+                pointBackgroundColor: '#c47a25',
+                pointBorderColor: '#ffffff',
                 pointBorderWidth: 2,
                 fill: true,
                 tension: 0.35
@@ -263,10 +263,10 @@
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#94a3b8' } },
+                x: { grid: { color: 'rgba(15,23,42,0.06)' }, ticks: { color: '#64748b' } },
                 y: {
-                    grid: { color: 'rgba(255,255,255,0.06)' },
-                    ticks: { color: '#94a3b8', callback: function (v) { return (v / 1000) + 'k'; } }
+                    grid: { color: 'rgba(15,23,42,0.08)' },
+                    ticks: { color: '#64748b', callback: function (v) { return (v / 1000) + 'k'; } }
                 }
             }
         }

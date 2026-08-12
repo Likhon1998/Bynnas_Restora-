@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Quote } from 'lucide-react';
-import { images } from '../../data/homeStatic';
+import { getSiteSettings } from '../../data/siteSettings';
 import Reveal from '../ui/Reveal';
 import SectionHeading from '../ui/SectionHeading';
 
 export default function Testimonials() {
+    const settings = getSiteSettings();
+    const items = settings.testimonials?.length ? settings.testimonials : [];
     const [index, setIndex] = useState(0);
-    const items = images.testimonials;
+
+    if (items.length === 0) return null;
 
     const prev = () => setIndex((i) => (i === 0 ? items.length - 1 : i - 1));
     const next = () => setIndex((i) => (i === items.length - 1 ? 0 : i + 1));
@@ -48,7 +51,7 @@ export default function Testimonials() {
 
                     <div className="grid gap-5 md:grid-cols-3 md:gap-6">
                         {visible.map((item, i) => (
-                            <Reveal key={`${item.id}-${index}`} delay={i * 90}>
+                            <Reveal key={`${item.id || item.name}-${index}`} delay={i * 90}>
                                 <article className="testimonial-card flex flex-col p-6">
                                     <Quote className="h-8 w-8 fill-ember/20 text-ember" />
                                     <p className="font-display mt-4 flex-1 text-[1.05rem] leading-7 text-ink/80 italic">

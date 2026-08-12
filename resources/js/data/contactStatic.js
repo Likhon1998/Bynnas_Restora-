@@ -1,4 +1,6 @@
-/** Static content for the Contact page (matches mockup). */
+/** Contact page content — cards pull live Admin → Settings values. */
+
+import { buildContactCards, getSiteSettings } from './siteSettings';
 
 export const GOLD = '#c47a25';
 
@@ -11,28 +13,7 @@ export const eventPromoImage =
 export const newsletterSpiceImage =
     'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=500&q=85';
 
-export const contactCards = [
-    {
-        key: 'location',
-        title: 'Our Location',
-        lines: ['123 Food Street, Flavor Town,', 'FT 12345, USA'],
-    },
-    {
-        key: 'phone',
-        title: 'Call Us',
-        lines: ['+1 (555) 123-4567', 'Mon – Sun: 10:00 AM – 11:00 PM'],
-    },
-    {
-        key: 'email',
-        title: 'Email Us',
-        lines: ['info@bynnasrestora.com', 'We reply within 24 hours'],
-    },
-    {
-        key: 'hours',
-        title: 'Opening Hours',
-        lines: ['Mon – Sun: 10:00 AM – 11:00 PM', 'Open All Days'],
-    },
-];
+export const contactCards = buildContactCards(getSiteSettings());
 
 export const subjectOptions = [
     'General Inquiry',

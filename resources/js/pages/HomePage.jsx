@@ -13,9 +13,9 @@ export default function HomePage() {
     return (
         <div className="min-h-screen bg-white">
             <Navbar />
-            <main>
+            <main className="home-stack">
                 <Hero />
-                <div className="bg-cream pb-8 lg:pb-10">
+                <div className="bg-cream pb-12 pt-2 sm:pb-14 lg:pb-16">
                     <BookingBar />
                     <ValueProps />
                 </div>

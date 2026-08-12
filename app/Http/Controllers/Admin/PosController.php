@@ -8,6 +8,8 @@ use App\Models\MenuItem;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\RestaurantTable;
+use App\Models\TaxSetting;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,13 +37,20 @@ class PosController extends Controller
             ->where('is_held', false)
             ->count();
 
+        $tax = TaxSetting::current();
+
         return view('admin.pos.index', [
             'user' => auth()->user(),
             'menuItems' => $menuItems,
             'categories' => $categories,
             'tables' => RestaurantTable::orderBy('code')->get(),
             'customers' => Customer::where('status', 'active')->orderBy('name')->get(),
-            'waiters' => ['Rahim Uddin', 'Karim Ali', 'Nusrat Jahan', 'Mina Rahman'],
+            'waiters' => User::query()
+                ->where('status', 'active')
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', ['waiter', 'cashier', 'manager']))
+                ->orderBy('name')
+                ->pluck('name')
+                ->all() ?: ['Walk-in Service'],
             'heldOrders' => $heldOrders,
             'heldOrdersPayload' => $heldOrders->map(fn (Order $order) => [
                 'id' => $order->id,
@@ -50,7 +59,8 @@ class PosController extends Controller
                 'table_id' => $order->table_id,
                 'table_code' => $order->table?->code,
                 'customer_id' => $order->customer_id,
-                'customer_name' => $order->customer_name ?? $order->customer?->name ?? 'Walk-in Customer',
+                'customer_name' => $order->customer_name ?? $order->customer?->name ?? '',
+                'customer_phone' => $order->customer_phone ?? $order->customer?->phone ?? '',
                 'guest_count' => $order->guest_count,
                 'promo_code' => $order->promo_code,
                 'discount_amount' => (float) $order->discount_amount,
@@ -74,6 +84,11 @@ class PosController extends Controller
             'nextOrderNumber' => 'ORD-'.now()->format('ymd').'-'.str_pad((string) (Order::count() + 1), 4, '0', STR_PAD_LEFT),
             'defaultType' => $request->get('type', 'dinein'),
             'notificationCount' => $heldOrders->count() + min($pendingCount, 5),
+            'taxSettings' => [
+                'tax_name' => $tax->tax_name,
+                'vat_rate' => (float) $tax->vat_rate,
+                'service_charge_rate' => (float) $tax->service_charge_rate,
+            ],
         ]);
     }
 
@@ -84,6 +99,7 @@ class PosController extends Controller
             'table_id' => ['nullable', 'exists:restaurant_tables,id'],
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_name' => ['nullable', 'string', 'max:120'],
+            'customer_phone' => ['nullable', 'string', 'max:40'],
             'guest_count' => ['nullable', 'integer', 'min:1', 'max:40'],
             'meta' => ['nullable', 'string', 'max:120'],
             'payment_method' => ['nullable', 'in:cash,card,online'],
@@ -128,8 +144,9 @@ class PosController extends Controller
                 ];
             }
 
-            $service = (float) ($data['service_charge'] ?? round($subtotal * 0.05, 2));
-            $tax = (float) ($data['tax_amount'] ?? round($subtotal * 0.07, 2));
+            $taxSettings = TaxSetting::current();
+            $service = (float) ($data['service_charge'] ?? round($subtotal * $taxSettings->serviceFraction(), 2));
+            $tax = (float) ($data['tax_amount'] ?? round($subtotal * $taxSettings->vatFraction(), 2));
             $tip = (float) ($data['tip_amount'] ?? 0);
             $discount = (float) ($data['discount_amount'] ?? 0);
             $total = max(0, $subtotal + $service + $tax + $tip - $discount);
@@ -144,6 +161,7 @@ class PosController extends Controller
                 'table_id' => $data['table_id'] ?? null,
                 'customer_id' => $data['customer_id'] ?? null,
                 'customer_name' => $data['customer_name'] ?? null,
+                'customer_phone' => $data['customer_phone'] ?? null,
                 'meta' => trim(($data['meta'] ?? '').(isset($data['payment_method']) ? ' · Pay: '.$data['payment_method'] : '')),
                 'guest_count' => $data['guest_count'] ?? null,
                 'subtotal' => $subtotal,

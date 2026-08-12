@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { InstagramIcon } from '../icons/BrandIcons';
-import { images } from '../../data/homeStatic';
+import { getSiteSettings } from '../../data/siteSettings';
 import Reveal from '../ui/Reveal';
 
 export default function Instagram() {
+    const settings = getSiteSettings();
+    const photos = settings.gallery_images?.length ? settings.gallery_images : [];
     const scrollerRef = useRef(null);
     const [canPrev, setCanPrev] = useState(false);
     const [canNext, setCanNext] = useState(true);
@@ -26,7 +28,7 @@ export default function Instagram() {
             el.removeEventListener('scroll', sync);
             window.removeEventListener('resize', sync);
         };
-    }, []);
+    }, [photos.length]);
 
     const scrollByDir = (dir) => {
         const el = scrollerRef.current;
@@ -35,8 +37,12 @@ export default function Instagram() {
         el.scrollBy({ left: dir * amount, behavior: 'smooth' });
     };
 
+    if (photos.length === 0) return null;
+
+    const igHref = settings.social_instagram || 'https://instagram.com';
+
     return (
-        <section id="blog" className="bg-[#111111] py-12 lg:py-14">
+        <section id="blog" className="section-pad bg-[#111111]">
             <div className="site-container">
                 <Reveal>
                     <div className="mb-8 flex flex-col items-center text-center">
@@ -46,7 +52,9 @@ export default function Instagram() {
                         <h2 className="font-display text-3xl font-semibold text-white md:text-[2.35rem]">
                             Follow Us On Instagram
                         </h2>
-                        <p className="mt-2 text-sm tracking-wide text-white/55">@bynnasrestora</p>
+                        <p className="mt-2 text-sm tracking-wide text-white/55">
+                            {settings.instagram_handle}
+                        </p>
                     </div>
                 </Reveal>
 
@@ -75,17 +83,17 @@ export default function Instagram() {
                             ref={scrollerRef}
                             className="flex gap-3 overflow-x-auto scroll-smooth px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-3.5 [&::-webkit-scrollbar]:hidden"
                         >
-                            {images.instagram.map((src, i) => (
+                            {photos.map((src, i) => (
                                 <a
-                                    key={src}
-                                    href="https://instagram.com"
+                                    key={`${src}-${i}`}
+                                    href={igHref}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="group relative aspect-square w-[min(42vw,160px)] shrink-0 overflow-hidden rounded-xl sm:w-[170px] md:w-[180px] lg:w-[min(15.5vw,190px)]"
                                 >
                                     <img
                                         src={src}
-                                        alt={`Instagram highlight ${i + 1}`}
+                                        alt={`Gallery highlight ${i + 1}`}
                                         loading="lazy"
                                         className="h-full w-full object-cover transition duration-500 group-hover:scale-110"
                                     />

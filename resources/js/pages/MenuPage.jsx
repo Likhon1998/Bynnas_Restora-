@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
     ArrowRight,
     ChevronDown,
@@ -16,17 +17,15 @@ import {
 import Navbar from '../components/home/Navbar';
 import Newsletter from '../components/home/Newsletter';
 import Footer from '../components/home/Footer';
-import {
-    freshIngredientsImage,
-    menuHeroImage,
-    specialBannerImage,
-} from '../data/menuStatic';
+import { useCart } from '../context/CartContext';
+import { formatMoney, getSiteSettings } from '../data/siteSettings';
 
 const badgeStyles = {
     green: 'bg-emerald-600 text-white',
     orange: 'bg-ember text-white',
     blue: 'bg-blue-600 text-white',
     red: 'bg-red-600 text-white',
+    gold: 'bg-gold text-ink',
 };
 
 const categoryIcons = {
@@ -41,35 +40,56 @@ const categoryIcons = {
     dessert: Cookie,
 };
 
-function money(n) {
-    return `৳ ${Number(n).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 export default function MenuPage() {
+    const settings = getSiteSettings();
+    const {
+        items: cart,
+        addItem,
+        changeQty,
+        subtotal,
+        service,
+        tax,
+        total,
+        setOpen,
+        orderingEnabled,
+        vatRate,
+        serviceRate,
+    } = useCart();
+
     const [menuCategories, setMenuCategories] = useState([{ id: 'all', label: 'All Items', icon: 'grid' }]);
     const [menuItems, setMenuItems] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [category, setCategory] = useState('all');
     const [sort, setSort] = useState('popularity');
     const [visibleCount, setVisibleCount] = useState(9);
-    const [cart, setCart] = useState([]);
     const [liked, setLiked] = useState({});
 
     useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        setError('');
         fetch('/api/web/menu')
-            .then((res) => res.json())
-            .then((data) => {
-                setMenuCategories(data.categories || []);
-                setMenuItems(
-                    (data.items || []).map((item) => ({
-                        ...item,
-                        image: item.image,
-                        isFavorite: item.isFavorite,
-                    })),
-                );
+            .then((res) => {
+                if (!res.ok) throw new Error('Could not load menu');
+                return res.json();
             })
-            .catch(() => setMenuItems([]))
-            .finally(() => setLoading(false));
+            .then((data) => {
+                if (cancelled) return;
+                setMenuCategories(data.categories || [{ id: 'all', label: 'All Items', icon: 'grid' }]);
+                setMenuItems(data.items || []);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setMenuItems([]);
+                setError('Menu is temporarily unavailable. Please try again shortly.');
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const filtered = useMemo(() => {
@@ -86,57 +106,32 @@ export default function MenuPage() {
     }, [category, sort, menuItems]);
 
     const shown = filtered.slice(0, visibleCount);
-
-    const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-    const tax = subtotal * 0.07;
-    const service = subtotal * 0.05;
-    const total = subtotal + tax + service;
-    const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
-
-    const addToCart = (item) => {
-        setCart((prev) => {
-            const found = prev.find((p) => p.id === item.id);
-            if (found) {
-                return prev.map((p) => (p.id === item.id ? { ...p, qty: p.qty + 1 } : p));
-            }
-            return [
-                ...prev,
-                { id: item.id, name: item.name, price: item.price, qty: 1, image: item.image },
-            ];
-        });
-    };
-
-    const changeQty = (id, delta) => {
-        setCart((prev) =>
-            prev
-                .map((p) => (p.id === id ? { ...p, qty: Math.max(0, p.qty + delta) } : p))
-                .filter((p) => p.qty > 0),
-        );
-    };
+    const activeCategoryLabel =
+        menuCategories.find((c) => c.id === category)?.label || 'All Items';
 
     return (
         <div className="min-h-screen bg-paper">
-            <Navbar cartCount={cartCount} />
+            <Navbar />
 
             <section className="relative overflow-hidden bg-ink text-white">
                 <div className="absolute inset-0">
                     <img
-                        src={menuHeroImage}
-                        alt="Pasta dish"
+                        src={settings.menu_hero_url}
+                        alt=""
+                        aria-hidden="true"
                         className="h-full w-full object-cover object-center"
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/75 to-black/45" />
                 </div>
                 <div className="relative site-container pt-28 pb-14 lg:pt-32 lg:pb-16">
                     <p className="font-script text-[1.55rem] leading-none text-ember">
-                        Delicious Choices, Made for You
+                        {settings.menu_eyebrow}
                     </p>
                     <h1 className="font-display mt-2 text-4xl font-semibold sm:text-5xl lg:text-[3.5rem]">
-                        Our Menu
+                        {settings.menu_title}
                     </h1>
                     <p className="mt-3 max-w-xl text-sm leading-6 text-white/75 sm:text-[15px]">
-                        Explore chef-crafted dishes made with fresh ingredients — from comfort
-                        classics to signature favorites, prepared with care every day.
+                        {settings.menu_subtitle}
                     </p>
                 </div>
             </section>
@@ -188,8 +183,12 @@ export default function MenuPage() {
                     <div>
                         <div className="mb-5">
                             <h2 className="font-display text-3xl font-semibold text-ink">
-                                Our Delicious Menu
+                                {settings.menu_list_title}
                             </h2>
+                            <p className="mt-1 text-sm text-muted">
+                                {activeCategoryLabel}
+                                {!loading ? ` · ${filtered.length} item${filtered.length === 1 ? '' : 's'}` : ''}
+                            </p>
                             <span className="mt-2 block h-1 w-14 rounded-full bg-ember" />
                         </div>
 
@@ -197,8 +196,15 @@ export default function MenuPage() {
                             <p className="text-sm text-muted">Loading menu from kitchen...</p>
                         )}
 
-                        {!loading && shown.length === 0 && (
-                            <p className="text-sm text-muted">No menu items available right now.</p>
+                        {!loading && error ? (
+                            <p className="text-sm text-red-600">{error}</p>
+                        ) : null}
+
+                        {!loading && !error && shown.length === 0 && (
+                            <p className="text-sm text-muted">
+                                No menu items available in this category right now. Add dishes in
+                                Admin → Menu Items.
+                            </p>
                         )}
 
                         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -223,14 +229,14 @@ export default function MenuPage() {
                                         )}
                                         <button
                                             type="button"
-                                            aria-label={`Save ${item.name}`}
+                                            aria-label="Favorite"
                                             onClick={() =>
                                                 setLiked((prev) => ({
                                                     ...prev,
                                                     [item.id]: !prev[item.id],
                                                 }))
                                             }
-                                            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-ink transition hover:text-ember"
+                                            className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-ink hover:text-ember"
                                         >
                                             <Heart
                                                 className={`h-4 w-4 ${liked[item.id] || item.isFavorite ? 'fill-ember text-ember' : ''}`}
@@ -246,12 +252,13 @@ export default function MenuPage() {
                                         </p>
                                         <div className="mt-4 flex items-center justify-between gap-3">
                                             <p className="text-base font-semibold text-ink">
-                                                {money(item.price)}
+                                                {formatMoney(item.price, settings)}
                                             </p>
                                             <button
                                                 type="button"
-                                                onClick={() => addToCart(item)}
-                                                className="inline-flex items-center gap-1.5 rounded-md border border-ember px-3 py-2 text-[13px] font-semibold text-ember transition hover:bg-ember hover:text-white"
+                                                disabled={!orderingEnabled}
+                                                onClick={() => addItem(item)}
+                                                className="inline-flex items-center gap-1.5 rounded-md border border-ember px-3 py-2 text-[13px] font-semibold text-ember transition hover:bg-ember hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                             >
                                                 <Plus className="h-3.5 w-3.5" />
                                                 Add to Cart
@@ -297,7 +304,7 @@ export default function MenuPage() {
                                                 {item.name}
                                             </p>
                                             <p className="text-sm text-ember">
-                                                {money(item.price)}
+                                                {formatMoney(item.price, settings)}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-1.5 rounded-md border border-line px-1.5 py-1">
@@ -328,30 +335,36 @@ export default function MenuPage() {
                             <div className="mt-5 space-y-1.5 border-t border-line pt-4 text-sm">
                                 <div className="flex justify-between text-muted">
                                     <span>Subtotal</span>
-                                    <span>{money(subtotal)}</span>
+                                    <span>{formatMoney(subtotal, settings)}</span>
                                 </div>
                                 <div className="flex justify-between text-muted">
-                                    <span>Service 5%</span>
-                                    <span>{money(service)}</span>
+                                    <span>Service {serviceRate}%</span>
+                                    <span>{formatMoney(service, settings)}</span>
                                 </div>
                                 <div className="flex justify-between text-muted">
-                                    <span>Tax 7%</span>
-                                    <span>{money(tax)}</span>
+                                    <span>Tax {vatRate}%</span>
+                                    <span>{formatMoney(tax, settings)}</span>
                                 </div>
                                 <div className="flex justify-between text-base font-semibold text-ink">
                                     <span>Total</span>
-                                    <span>{money(total)}</span>
+                                    <span>{formatMoney(total, settings)}</span>
                                 </div>
                             </div>
 
                             <div className="mt-4 grid gap-2.5">
-                                <button type="button" className="btn-primary w-full">
+                                <button
+                                    type="button"
+                                    onClick={() => setOpen(true)}
+                                    className="btn-primary w-full"
+                                >
                                     View Cart
                                     <ArrowRight className="h-4 w-4" />
                                 </button>
                                 <button
                                     type="button"
-                                    className="inline-flex w-full items-center justify-center rounded-md border border-ember px-4 py-2.5 text-sm font-semibold text-ember transition hover:bg-ember hover:text-white"
+                                    disabled={!orderingEnabled || cart.length === 0}
+                                    onClick={() => setOpen(true)}
+                                    className="inline-flex w-full items-center justify-center rounded-md border border-ember px-4 py-2.5 text-sm font-semibold text-ember transition hover:bg-ember hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     Checkout
                                 </button>
@@ -360,33 +373,32 @@ export default function MenuPage() {
 
                         <div className="rounded-xl border border-line bg-white p-5 shadow-sm">
                             <h3 className="font-display text-xl font-semibold text-ink">
-                                Food Allergies?
+                                {settings.menu_allergen_title}
                             </h3>
                             <p className="mt-2 text-[13px] leading-5 text-muted">
-                                Tell us about any allergies and we’ll help you choose safely.
+                                {settings.menu_allergen_text}
                             </p>
-                            <button
-                                type="button"
+                            <Link
+                                to="/contact"
                                 className="mt-4 inline-flex items-center gap-2 rounded-md border border-ink/15 px-4 py-2 text-sm font-semibold text-ink transition hover:border-ember hover:text-ember"
                             >
                                 View Allergen Info
-                            </button>
+                            </Link>
                         </div>
 
                         <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
                             <img
-                                src={freshIngredientsImage}
-                                alt="Fresh ingredients"
+                                src={settings.menu_fresh_image_url}
+                                alt={settings.menu_fresh_title}
                                 className="aspect-[16/10] w-full object-cover"
                                 loading="lazy"
                             />
                             <div className="p-5">
                                 <h3 className="font-display text-xl font-semibold text-ink">
-                                    Fresh Ingredients
+                                    {settings.menu_fresh_title}
                                 </h3>
                                 <p className="mt-2 text-[13px] leading-5 text-muted">
-                                    We source seasonal produce daily so every plate tastes vibrant
-                                    and clean.
+                                    {settings.menu_fresh_text}
                                 </p>
                             </div>
                         </div>
@@ -397,23 +409,23 @@ export default function MenuPage() {
             <section className="site-container pb-8 lg:pb-10">
                 <div className="relative overflow-hidden rounded-2xl">
                     <img
-                        src={specialBannerImage}
-                        alt="Chef special"
+                        src={settings.menu_special_image_url}
+                        alt=""
+                        aria-hidden="true"
                         className="h-44 w-full object-cover sm:h-52"
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/70 to-black/40" />
                     <div className="absolute inset-0 flex flex-col justify-center gap-4 px-6 sm:flex-row sm:items-center sm:justify-between sm:px-10">
                         <p className="max-w-xl font-display text-2xl leading-snug font-semibold text-white sm:text-3xl">
-                            Looking for something special? Our chefs are ready to create something
-                            amazing just for you.
+                            {settings.menu_special_title}
                         </p>
-                        <button
-                            type="button"
+                        <Link
+                            to="/contact"
                             className="inline-flex shrink-0 items-center gap-2 rounded-md border border-white/50 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
                         >
-                            Special Request
+                            {settings.menu_special_cta}
                             <ArrowRight className="h-4 w-4" />
-                        </button>
+                        </Link>
                     </div>
                 </div>
             </section>

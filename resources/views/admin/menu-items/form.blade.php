@@ -30,19 +30,21 @@
             <label>Badge
                 <select class="field" name="badge">
                     <option value="">None</option>
-                    @foreach (['Popular', 'Bestseller', 'New', 'Spicy'] as $badge)
+                    @foreach (['Best Seller', 'Popular', 'Bestseller', 'Hot', 'Chef Pick', 'New', 'Spicy'] as $badge)
                         <option value="{{ $badge }}" @selected(old('badge', $menuItem->badge) === $badge)>{{ $badge }}</option>
                     @endforeach
                 </select>
             </label>
             <label>Image URL<input class="field" name="image_url" value="{{ old('image_url', $menuItem->image_url) }}" placeholder="https://..."></label>
+            <label>Rating (0–5)<input class="field" type="number" step="0.1" min="0" max="5" name="rating" value="{{ old('rating', $menuItem->rating) }}" placeholder="4.9"></label>
+            <label>Review count<input class="field" type="number" min="0" name="review_count" value="{{ old('review_count', $menuItem->review_count) }}" placeholder="120"></label>
         </div>
-        <label style="display:block;margin-top:12px">Description
-            <textarea class="field" name="description" rows="3" style="height:auto;padding:10px 12px">{{ old('description', $menuItem->description) }}</textarea>
+        <label style="display:block;margin-top:12px">Ingredients / Description
+            <textarea class="field" name="description" rows="3" style="height:auto;padding:10px 12px" placeholder="e.g. Salmon, lemon butter, seasonal greens">{{ old('description', $menuItem->description) }}</textarea>
         </label>
         <div class="form-grid" style="margin-top:12px">
             <label><input type="checkbox" name="is_available" value="1" @checked(old('is_available', $menuItem->is_available))> Available on POS & website</label>
-            <label><input type="checkbox" name="is_favorite" value="1" @checked(old('is_favorite', $menuItem->is_favorite))> Featured / favorite</label>
+            <label><input type="checkbox" name="is_favorite" value="1" @checked(old('is_favorite', $menuItem->is_favorite))> Show on homepage (Featured)</label>
             <label><input type="checkbox" name="is_bestseller" value="1" @checked(old('is_bestseller', $menuItem->is_bestseller))> Bestseller</label>
             <label><input type="checkbox" name="is_vegetarian" value="1" @checked(old('is_vegetarian', $menuItem->is_vegetarian))> Vegetarian</label>
         </div>

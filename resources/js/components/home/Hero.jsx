@@ -10,7 +10,7 @@ import {
     Star,
     UtensilsCrossed,
 } from 'lucide-react';
-import { heroFeatures, images } from '../../data/homeStatic';
+import { getSiteSettings } from '../../data/siteSettings';
 
 const featureIcons = {
     leaf: Leaf,
@@ -20,6 +20,8 @@ const featureIcons = {
 };
 
 export default function Hero() {
+    const settings = getSiteSettings();
+    const features = settings.hero_features?.length ? settings.hero_features : [];
     const stageRef = useRef(null);
     const [tilt, setTilt] = useState({ x: 0, y: 0 });
     const [reduceMotion, setReduceMotion] = useState(false);
@@ -55,10 +57,9 @@ export default function Hero() {
 
     return (
         <section id="home" className="hero-bg relative overflow-hidden text-white">
-            {/* Cinematic background */}
             <div className="absolute inset-0">
                 <img
-                    src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=2200&q=85"
+                    src={settings.hero_bg_url}
                     alt=""
                     aria-hidden="true"
                     className="hero-kenburns h-full w-full object-cover"
@@ -72,31 +73,29 @@ export default function Hero() {
 
             <div className="relative site-container pt-[5.75rem] pb-28 sm:pt-28 sm:pb-32 lg:pt-[6.5rem] lg:pb-36">
                 <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 xl:gap-12">
-                    {/* Copy */}
                     <div className="max-w-[580px]">
                         <p className="anim-up font-script text-[2.1rem] leading-none text-gold-soft sm:text-[2.45rem]">
-                            Bynnas Restora
+                            {settings.restaurant_name}
                         </p>
 
                         <div className="anim-up-1 mt-3 mb-4 flex items-center gap-2.5">
                             <span className="h-px w-7 bg-gold/70" />
                             <p className="text-[11px] font-semibold tracking-[0.2em] text-gold uppercase sm:text-[12px]">
-                                Welcome to Fine Dining
+                                {settings.hero_eyebrow}
                             </p>
                             <span className="h-px w-7 bg-gold/70" />
                         </div>
 
                         <h1 className="anim-up-1 font-display text-[2.7rem] leading-[1.02] font-semibold sm:text-[3.4rem] lg:text-[3.85rem]">
-                            Good Food,{' '}
+                            {settings.hero_headline}{' '}
                             <span className="relative inline-block text-gold">
-                                Great Moments
+                                {settings.hero_headline_accent}
                                 <span className="hero-title-underline" aria-hidden="true" />
                             </span>
                         </h1>
 
                         <p className="anim-up-2 mt-5 max-w-md text-[14px] leading-7 text-white/74 sm:text-[15.5px]">
-                            Delicious meals made with fresh ingredients and passion. Experience the
-                            perfect blend of taste and tradition.
+                            {settings.hero_description}
                         </p>
 
                         <div className="anim-up-3 mt-7 flex flex-wrap items-center gap-3.5">
@@ -114,8 +113,8 @@ export default function Hero() {
                         </div>
 
                         <div className="anim-up-3 mt-9 grid grid-cols-2 gap-3.5 sm:grid-cols-4">
-                            {heroFeatures.map((item, index) => {
-                                const Icon = featureIcons[item.key];
+                            {features.map((item, index) => {
+                                const Icon = featureIcons[item.key] || Award;
                                 return (
                                     <div
                                         key={item.title}
@@ -139,7 +138,6 @@ export default function Hero() {
                         </div>
                     </div>
 
-                    {/* Plate stage */}
                     <div
                         ref={stageRef}
                         className="relative mx-auto w-full max-w-[520px] perspective-[1200px]"
@@ -157,14 +155,13 @@ export default function Hero() {
 
                             <div className="hero-plate">
                                 <img
-                                    src={images.hero}
-                                    alt="Signature grilled steak plate"
+                                    src={settings.hero_image_url}
+                                    alt={`${settings.restaurant_name} signature plate`}
                                     className="hero-plate-img"
                                 />
                                 <div className="hero-plate-shine" aria-hidden="true" />
                             </div>
 
-                            {/* Rating chip */}
                             <div className="hero-float-rating absolute top-[18%] -left-1 z-20 sm:-left-4 lg:-left-6">
                                 <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#0d0d0d]/88 px-3 py-2 backdrop-blur-md">
                                     <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ember text-white">
@@ -209,7 +206,7 @@ export default function Hero() {
                                         We Are Open
                                     </p>
                                     <p className="text-[13px] font-medium text-white">
-                                        Mon – Sun · 10:00 AM – 11:00 PM
+                                        {settings.opening_hours}
                                     </p>
                                 </div>
                             </div>

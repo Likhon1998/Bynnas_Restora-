@@ -77,6 +77,8 @@ class MenuItemController extends Controller
             'image_url' => ['nullable', 'url', 'max:500'],
             'badge' => ['nullable', 'string', 'max:30'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
+            'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
+            'review_count' => ['nullable', 'integer', 'min:0'],
             'is_available' => ['nullable', 'boolean'],
             'is_favorite' => ['nullable', 'boolean'],
             'is_bestseller' => ['nullable', 'boolean'],

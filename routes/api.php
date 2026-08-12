@@ -17,7 +17,10 @@ use Illuminate\Support\Facades\Route;
 */
 
 use App\Http\Controllers\Api\WebMenuController;
+use App\Http\Controllers\Api\WebOrderController;
 
 Route::prefix('web')->group(function () {
     Route::get('menu', [WebMenuController::class, 'index']);
+    Route::get('menu/featured', [WebMenuController::class, 'featured']);
+    Route::post('orders', [WebOrderController::class, 'store']);
 });

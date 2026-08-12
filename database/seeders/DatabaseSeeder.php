@@ -28,6 +28,8 @@ class DatabaseSeeder extends Seeder
         $this->call([
             InventorySeeder::class,
             OperationsSeeder::class,
+            FinanceSeeder::class,
+            StaffSettingsSeeder::class,
         ]);
     }
 }

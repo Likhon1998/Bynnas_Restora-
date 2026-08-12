@@ -10,7 +10,7 @@ class Order extends Model
 {
     protected $fillable = [
         'order_number', 'type', 'status', 'table_id', 'customer_id', 'customer_name',
-        'meta', 'guest_count', 'subtotal', 'service_charge', 'tax_amount', 'tip_amount',
+        'customer_phone', 'meta', 'guest_count', 'subtotal', 'service_charge', 'tax_amount', 'tip_amount',
         'promo_code', 'discount_amount', 'total', 'payment_status', 'is_held',
         'notes', 'tags', 'placed_at',
     ];

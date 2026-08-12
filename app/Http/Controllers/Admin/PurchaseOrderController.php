@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\InventoryItem;
+use App\Models\InventoryTransaction;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
+use App\Services\InventoryService;
 use App\Support\AdminNav;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,6 +17,10 @@ use Illuminate\View\View;
 
 class PurchaseOrderController extends Controller
 {
+    public function __construct(private readonly InventoryService $inventory)
+    {
+    }
+
     public function index(Request $request): View
     {
         $status = $request->get('status');
@@ -62,6 +68,10 @@ class PurchaseOrderController extends Controller
             $order = PurchaseOrder::create(collect($data)->except('lines')->all());
             $total = $this->syncLines($order, $data['lines'] ?? []);
             $order->update(['total_amount' => $total]);
+
+            if ($data['status'] === 'received') {
+                $this->receiveStock($order->fresh('items'));
+            }
         });
 
         return redirect()->route('admin.purchase-orders.index')->with('success', 'Purchase order created.');
@@ -160,13 +170,29 @@ class PurchaseOrderController extends Controller
     private function receiveStock(PurchaseOrder $order): void
     {
         foreach ($order->items as $line) {
-            $item = InventoryItem::find($line->inventory_item_id);
+            $item = InventoryItem::query()->find($line->inventory_item_id);
             if (! $item) {
                 continue;
             }
-            $item->quantity_on_hand = (float) $item->quantity_on_hand + (float) $line->quantity;
-            $item->unit_cost = $line->unit_cost;
-            $item->save();
+
+            $qty = (float) $line->quantity;
+            $purchaseCost = (float) $line->unit_cost;
+
+            // WAC must run against on-hand qty/cost BEFORE the receipt hits the ledger.
+            $this->inventory->recalculateUnitCost($item, $qty, $purchaseCost);
+
+            $locationId = $this->inventory->resolveLocationId($item);
+
+            $this->inventory->recordTransaction(
+                inventoryItemId: $item->id,
+                locationId: $locationId,
+                type: InventoryTransaction::TYPE_PO_RECEIPT,
+                quantityChange: $qty,
+                referenceType: PurchaseOrder::class,
+                referenceId: $order->id,
+                notes: "PO {$order->po_number} receipt",
+            );
+
             $line->update(['received_qty' => $line->quantity]);
         }
     }

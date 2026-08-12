@@ -130,7 +130,8 @@
         <input type="hidden" name="discount_amount" id="discountInput" value="0">
         <input type="hidden" name="table_id" id="tableIdInput" value="{{ $defaultTable?->id }}">
         <input type="hidden" name="guest_count" id="guestCountInput" value="4">
-        <input type="hidden" name="customer_name" id="customerName" value="Walk-in Customer">
+        <input type="hidden" name="customer_name" id="customerName" value="">
+        <input type="hidden" name="customer_phone" id="customerPhone" value="">
         <input type="hidden" name="resume_order_id" id="resumeOrderId" value="">
         <div id="cartHiddenInputs"></div>
 
@@ -138,7 +139,7 @@
             <select name="customer_id" id="customerSelect">
                 <option value="">Walk-in Customer</option>
                 @foreach ($customers as $customer)
-                    <option value="{{ $customer->id }}" data-name="{{ $customer->name }}">{{ $customer->name }}</option>
+                    <option value="{{ $customer->id }}" data-name="{{ $customer->name }}" data-phone="{{ $customer->phone }}">{{ $customer->name }}</option>
                 @endforeach
             </select>
             <select name="meta" id="waiterSelect">
@@ -222,6 +223,11 @@
                         </div>
                         <div class="info">
                             <p class="name">{{ $item->name }}</p>
+                            @if ($item->description)
+                                <p class="ingredients">{{ $item->description }}</p>
+                            @else
+                                <p class="ingredients muted">No ingredients listed</p>
+                            @endif
                             <div class="foot">
                                 <span class="price">৳ {{ number_format((float) $item->price, 2) }}</span>
                                 <span class="add-btn" aria-hidden="true">+</span>
@@ -271,8 +277,8 @@
 
                 <div class="totals-block">
                     <div><span>Subtotal</span><span id="subtotalLabel">৳ 0.00</span></div>
-                    <div><span>Service Charge (5%)</span><span id="serviceLabel">৳ 0.00</span></div>
-                    <div><span>Tax (VAT 7%)</span><span id="taxLabel">৳ 0.00</span></div>
+                    <div><span>Service Charge (<span id="serviceRateLabel">5</span>%)</span><span id="serviceLabel">৳ 0.00</span></div>
+                    <div><span><span id="taxNameLabel">Tax (VAT</span> <span id="taxRateLabel">7</span>%)</span><span id="taxLabel">৳ 0.00</span></div>
                     <div id="discountRow" class="discount-line hidden"><span>Discount</span><span id="discountLabel">-৳ 0.00</span></div>
                     <div class="total-row">
                         <span>Total</span>
@@ -335,7 +341,7 @@
             </div>
             <div class="data">
                 <small>Customer</small>
-                <strong id="statCustomer">Walk-in Customer</strong>
+                <strong id="statCustomer">Walk-in</strong>
             </div>
             <button type="button" class="action-btn" id="customerPickerBtn" title="Select customer">+</button>
         </div>
@@ -394,7 +400,13 @@
             <button type="button" data-pay="card">Debit Card</button>
             <button type="button" data-pay="online">Online</button>
         </div>
-        <label class="field-label" style="display:block;margin-bottom:6px;font-size:11px;font-weight:800;color:#6b7a90;text-transform:uppercase;">Notes (optional)</label>
+        <div class="pay-customer-fields">
+            <label class="field-label" style="display:block;margin-bottom:6px;font-size:11px;font-weight:800;color:#6b7a90;text-transform:uppercase;">Customer name (optional)</label>
+            <input type="text" class="field" id="modalCustomerName" placeholder="e.g. Walk-in / Guest name" autocomplete="name">
+            <label class="field-label" style="display:block;margin:10px 0 6px;font-size:11px;font-weight:800;color:#6b7a90;text-transform:uppercase;">Phone number (optional)</label>
+            <input type="tel" class="field" id="modalCustomerPhone" placeholder="e.g. 01XXXXXXXXX" autocomplete="tel">
+        </div>
+        <label class="field-label" style="display:block;margin:10px 0 6px;font-size:11px;font-weight:800;color:#6b7a90;text-transform:uppercase;">Notes (optional)</label>
         <textarea class="field" id="modalNotes" style="height:72px;padding:10px 12px;resize:vertical;" placeholder="Add order note..."></textarea>
         <div class="modal-actions">
             <button type="button" id="cancelPayModal">Cancel</button>
@@ -409,7 +421,7 @@
         <select class="field" id="modalCustomerSelect">
             <option value="">Walk-in Customer</option>
             @foreach ($customers as $customer)
-                <option value="{{ $customer->id }}" data-name="{{ $customer->name }}">{{ $customer->name }}</option>
+                <option value="{{ $customer->id }}" data-name="{{ $customer->name }}" data-phone="{{ $customer->phone }}">{{ $customer->name }}{{ $customer->phone ? ' · '.$customer->phone : '' }}</option>
             @endforeach
         </select>
         <div class="modal-actions">
@@ -443,6 +455,11 @@
     $posJsPath = public_path('js/pos-app.js');
     $posJsVer = file_exists($posJsPath) ? filemtime($posJsPath) : time();
 @endphp
-<script>window.POS_CONFIG = { heldOrders: @json($heldOrdersPayload) };</script>
+<script>window.POS_CONFIG = {
+    heldOrders: @json($heldOrdersPayload),
+    vatRate: {{ (float) ($taxSettings['vat_rate'] ?? 7) }},
+    serviceRate: {{ (float) ($taxSettings['service_charge_rate'] ?? 5) }},
+    taxName: @json($taxSettings['tax_name'] ?? 'VAT')
+};</script>
 <script src="{{ $posRoot }}/js/pos-app.js?v={{ $posJsVer }}"></script>
 @endpush

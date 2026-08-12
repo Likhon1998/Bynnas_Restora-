@@ -17,7 +17,6 @@ import Navbar from '../components/home/Navbar';
 import Footer from '../components/home/Footer';
 import {
     GOLD,
-    contactCards,
     contactFaqs,
     contactHeroImage,
     eventPromoImage,
@@ -25,6 +24,7 @@ import {
     newsletterSpiceImage,
     subjectOptions,
 } from '../data/contactStatic';
+import { buildContactCards, getSiteSettings } from '../data/siteSettings';
 
 const cardIcons = {
     location: MapPin,
@@ -47,12 +47,13 @@ export default function ContactPage() {
     const [openFaq, setOpenFaq] = useState(0);
     const [email, setEmail] = useState('');
     const [subscribed, setSubscribed] = useState(false);
+    const contactCards = buildContactCards(getSiteSettings());
 
     const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
     return (
         <div className="min-h-screen bg-[#faf7f2]">
-            <Navbar cartCount={2} />
+            <Navbar />
 
             {/* Hero */}
             <section className="relative overflow-hidden bg-[#0d0d0d] text-white">

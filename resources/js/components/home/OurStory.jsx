@@ -1,8 +1,15 @@
 import { Check, Trophy } from 'lucide-react';
-import { images, storyPoints } from '../../data/homeStatic';
+import { getSiteSettings } from '../../data/siteSettings';
 import Reveal from '../ui/Reveal';
 
 export default function OurStory() {
+    const settings = getSiteSettings();
+    const points = settings.story_points?.length ? settings.story_points : [];
+    const paragraphs = String(settings.story_body || '')
+        .split(/\n\s*\n/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+
     return (
         <section id="about" className="section-pad bg-cream">
             <div className="site-container grid items-center gap-8 lg:grid-cols-2 lg:gap-10">
@@ -10,13 +17,15 @@ export default function OurStory() {
                     <div className="relative grid grid-cols-2 gap-3">
                         <div className="relative col-span-2 overflow-hidden rounded-2xl sm:col-span-1 sm:row-span-2 sm:min-h-[400px]">
                             <img
-                                src={images.story.chef}
+                                src={settings.story_chef_url}
                                 alt="Chef plating a signature dish"
                                 className="h-full min-h-[280px] w-full object-cover sm:absolute sm:inset-0"
                                 loading="lazy"
                             />
                             <div className="absolute bottom-4 left-4 rounded-lg bg-ink/92 px-4 py-3 text-white shadow-lg">
-                                <p className="font-display text-2xl font-semibold text-gold-soft">15+</p>
+                                <p className="font-display text-2xl font-semibold text-gold-soft">
+                                    {settings.story_years_label}
+                                </p>
                                 <p className="text-[11px] tracking-[0.12em] text-white/75 uppercase">
                                     Years of Experience
                                 </p>
@@ -24,7 +33,7 @@ export default function OurStory() {
                         </div>
                         <div className="overflow-hidden rounded-2xl">
                             <img
-                                src={images.story.interior}
+                                src={settings.story_interior_url}
                                 alt="Restaurant interior"
                                 className="h-40 w-full object-cover sm:h-[185px]"
                                 loading="lazy"
@@ -32,8 +41,8 @@ export default function OurStory() {
                         </div>
                         <div className="overflow-hidden rounded-2xl">
                             <img
-                                src={images.story.pizza}
-                                alt="Wood-fired pizza"
+                                src={settings.story_food_url}
+                                alt="Signature food"
                                 className="h-40 w-full object-cover sm:h-[185px]"
                                 loading="lazy"
                             />
@@ -43,22 +52,23 @@ export default function OurStory() {
 
                 <Reveal delay={100}>
                     <div>
-                        <p className="font-script text-[1.5rem] leading-none text-ember">Our Story</p>
+                        <p className="font-script text-[1.5rem] leading-none text-ember">
+                            {settings.story_eyebrow}
+                        </p>
                         <h2 className="font-display mt-1.5 text-3xl font-semibold text-ink md:text-4xl">
-                            A Passion for Great Food
+                            {settings.story_title}
                         </h2>
-                        <p className="mt-4 text-[13px] leading-6 text-muted sm:text-sm sm:leading-7">
-                            Bynnas Restora began with a simple belief: great meals create lasting
-                            memories. From our kitchen to your table, we blend tradition with modern
-                            craft to deliver dishes that feel both familiar and exciting.
-                        </p>
-                        <p className="mt-3 text-[13px] leading-6 text-muted sm:text-sm sm:leading-7">
-                            Every plate is prepared with care, every guest is welcomed like family,
-                            and every evening is designed around comfort, flavor, and hospitality.
-                        </p>
+                        {paragraphs.map((text) => (
+                            <p
+                                key={text.slice(0, 32)}
+                                className="mt-4 text-[13px] leading-6 text-muted sm:text-sm sm:leading-7"
+                            >
+                                {text}
+                            </p>
+                        ))}
 
                         <ul className="mt-5 space-y-2.5">
-                            {storyPoints.map((point) => (
+                            {points.map((point) => (
                                 <li key={point} className="flex items-start gap-3 text-sm text-ink">
                                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ember text-white">
                                         <Check className="h-3 w-3" strokeWidth={3} />
@@ -70,8 +80,10 @@ export default function OurStory() {
 
                         <div className="mt-6 flex flex-wrap items-end justify-between gap-4 border-t border-line pt-5">
                             <div>
-                                <p className="font-script text-3xl text-ember">Chef Bynnas</p>
-                                <p className="mt-0.5 text-sm text-muted">Founder & Head Chef</p>
+                                <p className="font-script text-3xl text-ember">
+                                    {settings.story_chef_name}
+                                </p>
+                                <p className="mt-0.5 text-sm text-muted">{settings.story_chef_role}</p>
                             </div>
                             <div className="flex items-center gap-3 rounded-lg bg-ink px-4 py-3 text-white shadow-lg">
                                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ember/20 text-gold-soft">
@@ -79,7 +91,7 @@ export default function OurStory() {
                                 </span>
                                 <div>
                                     <p className="font-display text-xl font-semibold text-gold-soft">
-                                        25K+
+                                        {settings.story_customers_label}
                                     </p>
                                     <p className="text-[11px] text-white/70">Happy Customers</p>
                                 </div>

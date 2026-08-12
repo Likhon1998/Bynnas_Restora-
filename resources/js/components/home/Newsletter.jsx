@@ -4,7 +4,7 @@ import Reveal from '../ui/Reveal';
 export default function Newsletter() {
     return (
         <section className="newsletter-panel">
-            <div className="site-container py-8 md:py-9">
+            <div className="site-container py-12 md:py-14 lg:py-16">
                 <Reveal>
                     <div className="flex flex-col items-center justify-between gap-6 md:flex-row md:gap-8">
                         <div className="flex items-center gap-3.5 text-center md:text-left">

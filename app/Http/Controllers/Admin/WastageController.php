@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\InventoryItem;
+use App\Models\InventoryTransaction;
 use App\Models\WastageRecord;
+use App\Services\InventoryService;
 use App\Support\AdminNav;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,6 +15,10 @@ use Illuminate\View\View;
 
 class WastageController extends Controller
 {
+    public function __construct(private readonly InventoryService $inventory)
+    {
+    }
+
     public function index(Request $request): View
     {
         $type = $request->get('type');
@@ -60,15 +66,25 @@ class WastageController extends Controller
         $data = $this->validated($request);
 
         DB::transaction(function () use ($data) {
-            $item = InventoryItem::findOrFail($data['inventory_item_id']);
+            $item = InventoryItem::query()->findOrFail($data['inventory_item_id']);
             $qty = (float) $data['quantity'];
             $data['cost_impact'] = $qty * (float) $item->unit_cost;
 
-            WastageRecord::create($data);
+            $record = WastageRecord::create($data);
 
+            // Variance is audit-only; only wastage deducts stock via the ledger.
             if ($data['type'] === 'wastage') {
-                $item->quantity_on_hand = max(0, (float) $item->quantity_on_hand - $qty);
-                $item->save();
+                $locationId = $this->inventory->resolveLocationId($item);
+
+                $this->inventory->recordTransaction(
+                    inventoryItemId: $item->id,
+                    locationId: $locationId,
+                    type: InventoryTransaction::TYPE_WASTAGE,
+                    quantityChange: -abs($qty),
+                    referenceType: WastageRecord::class,
+                    referenceId: $record->id,
+                    notes: $data['reason'],
+                );
             }
         });
 

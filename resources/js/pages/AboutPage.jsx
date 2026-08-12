@@ -39,7 +39,7 @@ const statIcons = { smile: Smile, dish: UtensilsCrossed, award: Medal, pin: MapP
 export default function AboutPage() {
     return (
         <div className="min-h-screen bg-[#fcfbf7] text-ink">
-            <Navbar cartCount={1} />
+            <Navbar />
 
             {/* HERO */}
             <section className="relative overflow-hidden bg-[#0a0a0a] text-white">

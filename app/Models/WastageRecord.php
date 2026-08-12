@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WastageRecord extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'inventory_item_id', 'quantity', 'reason', 'type', 'cost_impact', 'recorded_on', 'notes',
     ];

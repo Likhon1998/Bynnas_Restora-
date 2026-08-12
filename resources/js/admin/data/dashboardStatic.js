@@ -32,18 +32,18 @@ export const navSections = [
     {
         title: 'Finance',
         items: [
-            { label: 'Accounting', key: 'accounting', icon: 'wallet' },
-            { label: 'Reports', key: 'reports', icon: 'chart' },
-            { label: 'Expenses', key: 'expenses', icon: 'receipt' },
-            { label: 'Tax Management', key: 'tax', icon: 'percent' },
+            { label: 'Accounting', key: 'accounting', icon: 'wallet', href: '/admin/accounting' },
+            { label: 'Reports', key: 'reports', icon: 'chart', href: '/admin/reports' },
+            { label: 'Expenses', key: 'expenses', icon: 'receipt', href: '/admin/expenses' },
+            { label: 'Tax Management', key: 'tax', icon: 'percent', href: '/admin/tax' },
         ],
     },
     {
         title: 'Staff & Settings',
         items: [
-            { label: 'Staff Management', key: 'staff', icon: 'badge' },
-            { label: 'Roles & Permissions', key: 'roles', icon: 'shield' },
-            { label: 'Settings', key: 'settings', icon: 'settings' },
+            { label: 'Staff Management', key: 'staff', icon: 'badge', href: '/admin/staff' },
+            { label: 'Roles & Permissions', key: 'roles', icon: 'shield', href: '/admin/roles' },
+            { label: 'Settings', key: 'settings', icon: 'settings', href: '/admin/settings' },
         ],
     },
 ];

@@ -1,5 +1,5 @@
 import { CalendarCheck2, Home, Salad, ShieldCheck } from 'lucide-react';
-import { valueProps } from '../../data/homeStatic';
+import { getSiteSettings } from '../../data/siteSettings';
 import Reveal from '../ui/Reveal';
 
 const icons = {
@@ -10,11 +10,14 @@ const icons = {
 };
 
 export default function ValueProps() {
+    const settings = getSiteSettings();
+    const items = settings.value_props?.length ? settings.value_props : [];
+
     return (
-        <section className="pt-10 pb-1 sm:pt-12 lg:pt-14">
-            <div className="site-container grid gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
-                {valueProps.map((item, index) => {
-                    const Icon = icons[item.key];
+        <section className="pt-12 pb-2 sm:pt-14 lg:pt-16">
+            <div className="site-container grid gap-8 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+                {items.map((item, index) => {
+                    const Icon = icons[item.key] || ShieldCheck;
                     return (
                         <Reveal key={item.title} delay={index * 60}>
                             <div className="text-center">

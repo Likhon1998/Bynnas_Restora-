@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class StockTransfer extends Model
 {
     protected $fillable = [
-        'transfer_number', 'inventory_item_id', 'from_location', 'to_location',
+        'transfer_number', 'inventory_item_id', 'from_location_id', 'to_location_id',
         'quantity', 'transfer_date', 'status', 'notes',
     ];
 
@@ -23,5 +23,15 @@ class StockTransfer extends Model
     public function inventoryItem(): BelongsTo
     {
         return $this->belongsTo(InventoryItem::class);
+    }
+
+    public function fromLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'from_location_id');
+    }
+
+    public function toLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'to_location_id');
     }
 }

@@ -93,36 +93,48 @@ export default function AdminShell({ userName, userEmail, children }) {
                             {section.items.map((item) => {
                                 const Icon = icons[item.icon] || LayoutDashboard;
                                 const isActive = active === item.key;
+                                const className = `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition ${
+                                    isActive
+                                        ? 'bg-white/5 text-[#e0a84a]'
+                                        : 'text-white/65 hover:bg-white/4 hover:text-white'
+                                }`;
+                                const style = isActive
+                                    ? { boxShadow: `inset 3px 0 0 ${GOLD}` }
+                                    : undefined;
+                                const content = (
+                                    <>
+                                        <Icon className="h-4 w-4 shrink-0 opacity-90" />
+                                        <span className="flex-1 truncate">{item.label}</span>
+                                        {item.badge ? (
+                                            <span
+                                                className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                                                style={{ background: GOLD }}
+                                            >
+                                                {item.badge}
+                                            </span>
+                                        ) : null}
+                                    </>
+                                );
+
                                 return (
                                     <li key={item.key}>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setActive(item.key);
-                                                setOpen(false);
-                                            }}
-                                            className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition ${
-                                                isActive
-                                                    ? 'bg-white/5 text-[#e0a84a]'
-                                                    : 'text-white/65 hover:bg-white/4 hover:text-white'
-                                            }`}
-                                            style={
-                                                isActive
-                                                    ? { boxShadow: `inset 3px 0 0 ${GOLD}` }
-                                                    : undefined
-                                            }
-                                        >
-                                            <Icon className="h-4 w-4 shrink-0 opacity-90" />
-                                            <span className="flex-1 truncate">{item.label}</span>
-                                            {item.badge ? (
-                                                <span
-                                                    className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
-                                                    style={{ background: GOLD }}
-                                                >
-                                                    {item.badge}
-                                                </span>
-                                            ) : null}
-                                        </button>
+                                        {item.href ? (
+                                            <a href={item.href} className={className} style={style}>
+                                                {content}
+                                            </a>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setActive(item.key);
+                                                    setOpen(false);
+                                                }}
+                                                className={className}
+                                                style={style}
+                                            >
+                                                {content}
+                                            </button>
+                                        )}
                                     </li>
                                 );
                             })}

@@ -39,7 +39,7 @@ class WebMenuController extends Controller
             ->unique()
             ->values()
             ->map(fn (string $label) => [
-                'id' => $this->slug($label),
+                'id' => $label === 'All Items' ? 'all' : $this->slug($label),
                 'label' => $label,
                 'icon' => self::CATEGORY_ICONS[$label] ?? 'grid',
             ]);
@@ -50,9 +50,34 @@ class WebMenuController extends Controller
         ]);
     }
 
+    public function featured(): JsonResponse
+    {
+        $items = MenuItem::query()
+            ->where('is_available', true)
+            ->where('is_favorite', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit(8)
+            ->get();
+
+        // Fallback: top available items if nothing is flagged featured yet
+        if ($items->isEmpty()) {
+            $items = MenuItem::query()
+                ->where('is_available', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->limit(4)
+                ->get();
+        }
+
+        return response()->json([
+            'items' => $items->map(fn (MenuItem $item) => $this->transformItem($item))->values(),
+        ]);
+    }
+
     private function transformItem(MenuItem $item): array
     {
-        $badge = $item->badge ?: ($item->is_bestseller ? 'Bestseller' : null);
+        $badge = $item->badge ?: ($item->is_bestseller ? 'Bestseller' : ($item->is_favorite ? 'Popular' : null));
 
         return [
             'id' => $item->id,
@@ -68,17 +93,20 @@ class WebMenuController extends Controller
             'isBestseller' => (bool) $item->is_bestseller,
             'isVegetarian' => (bool) $item->is_vegetarian,
             'isPopular' => strtolower((string) $badge) === 'popular' || $item->is_bestseller || $item->is_favorite,
+            'rating' => $item->rating !== null ? (float) $item->rating : 4.8,
+            'reviews' => $item->review_count !== null ? (int) $item->review_count : 100,
         ];
     }
 
     private function badgeTone(?string $badge): ?string
     {
         return match (strtolower((string) preg_replace('/\s+/', '', (string) $badge))) {
-            'popular' => 'green',
-            'bestseller' => 'orange',
+            'popular' => 'orange',
+            'bestseller' => 'green',
             'new' => 'blue',
-            'spicy' => 'red',
-            default => null,
+            'spicy', 'hot' => 'red',
+            'chefpick', 'chefspick' => 'gold',
+            default => 'green',
         };
     }
 

@@ -1,6 +1,9 @@
 (function () {
     var config = window.POS_CONFIG || {};
     var heldOrders = config.heldOrders || [];
+    var vatRate = Number(config.vatRate != null ? config.vatRate : 7) / 100;
+    var serviceRate = Number(config.serviceRate != null ? config.serviceRate : 5) / 100;
+    var taxName = config.taxName || 'VAT';
     var cart = [];
     var discount = 0;
     var discountPct = null;
@@ -12,6 +15,13 @@
     var hidden = document.getElementById('cartHiddenInputs');
     var flash = document.getElementById('posFlash');
     if (flash) setTimeout(function () { flash.remove(); }, 3500);
+
+    var serviceRateLabel = document.getElementById('serviceRateLabel');
+    var taxRateLabel = document.getElementById('taxRateLabel');
+    var taxNameLabel = document.getElementById('taxNameLabel');
+    if (serviceRateLabel) serviceRateLabel.textContent = String(Number(config.serviceRate != null ? config.serviceRate : 5));
+    if (taxRateLabel) taxRateLabel.textContent = String(Number(config.vatRate != null ? config.vatRate : 7));
+    if (taxNameLabel) taxNameLabel.textContent = 'Tax (' + taxName;
 
     function money(n) {
         return '৳ ' + Number(n).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -41,8 +51,8 @@
     function totals() {
         var subtotal = cart.reduce(function (s, i) { return s + i.price * i.qty; }, 0);
         if (discountPct) discount = +(subtotal * (discountPct / 100)).toFixed(2);
-        var service = +(subtotal * 0.05).toFixed(2);
-        var tax = +(subtotal * 0.07).toFixed(2);
+        var service = +(subtotal * serviceRate).toFixed(2);
+        var tax = +(subtotal * vatRate).toFixed(2);
         var total = Math.max(0, subtotal + service + tax - discount);
         return { subtotal: subtotal, service: service, tax: tax, total: total };
     }
@@ -303,10 +313,16 @@
         document.getElementById('tableModal').classList.add('hidden');
     });
 
-    function syncCustomer(id, name) {
-        document.getElementById('customerSelect').value = id;
-        document.getElementById('customerName').value = name;
-        document.getElementById('statCustomer').textContent = name;
+    function syncCustomer(id, name, phone) {
+        document.getElementById('customerSelect').value = id || '';
+        document.getElementById('customerName').value = name || '';
+        var phoneInput = document.getElementById('customerPhone');
+        if (phoneInput) phoneInput.value = phone || '';
+        document.getElementById('statCustomer').textContent = name || 'Walk-in';
+        var modalName = document.getElementById('modalCustomerName');
+        var modalPhone = document.getElementById('modalCustomerPhone');
+        if (modalName) modalName.value = name || '';
+        if (modalPhone) modalPhone.value = phone || '';
     }
 
     document.getElementById('customerPickerBtn').addEventListener('click', function () {
@@ -319,8 +335,9 @@
     document.getElementById('confirmCustomerBtn').addEventListener('click', function () {
         var sel = document.getElementById('modalCustomerSelect');
         var opt = sel.options[sel.selectedIndex];
-        var name = sel.value ? (opt.dataset.name || opt.text) : 'Walk-in Customer';
-        syncCustomer(sel.value, name);
+        var name = sel.value ? (opt.dataset.name || opt.text) : '';
+        var phone = sel.value ? (opt.dataset.phone || '') : '';
+        syncCustomer(sel.value, name, phone);
         document.getElementById('customerModal').classList.add('hidden');
     });
 
@@ -358,7 +375,7 @@
                 document.getElementById('guestCount').value = order.guest_count;
                 document.getElementById('guestCountInput').value = order.guest_count;
             }
-            syncCustomer(order.customer_id || '', order.customer_name);
+            syncCustomer(order.customer_id || '', order.customer_name || '', order.customer_phone || '');
             document.getElementById('notifPanel').classList.add('hidden');
             render();
             toast('Held order loaded');
@@ -407,12 +424,21 @@
 
     document.getElementById('payBtn').addEventListener('click', function () {
         if (!cart.length) { toast('Add at least one menu item'); return; }
+        var nameEl = document.getElementById('modalCustomerName');
+        var phoneEl = document.getElementById('modalCustomerPhone');
+        if (nameEl) nameEl.value = document.getElementById('customerName').value || '';
+        if (phoneEl) phoneEl.value = document.getElementById('customerPhone').value || '';
         document.getElementById('payModal').classList.remove('hidden');
     });
     document.getElementById('cancelPayModal').addEventListener('click', function () {
         document.getElementById('payModal').classList.add('hidden');
     });
     document.getElementById('confirmPayBtn').addEventListener('click', function () {
+        var name = (document.getElementById('modalCustomerName').value || '').trim();
+        var phone = (document.getElementById('modalCustomerPhone').value || '').trim();
+        document.getElementById('customerName').value = name;
+        document.getElementById('customerPhone').value = phone;
+        document.getElementById('statCustomer').textContent = name || 'Walk-in';
         document.getElementById('orderNotes').value = document.getElementById('modalNotes').value;
         document.getElementById('posAction').value = 'pay';
         document.getElementById('payModal').classList.add('hidden');

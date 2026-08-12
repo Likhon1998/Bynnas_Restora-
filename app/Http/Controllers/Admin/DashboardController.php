@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\Expense;
 use App\Models\InventoryItem;
 use App\Models\LoyaltyTransaction;
 use App\Models\Order;
 use App\Models\PurchaseOrder;
 use App\Models\Reservation;
 use App\Models\RestaurantTable;
+use App\Models\User;
 use App\Support\AdminNav;
 use Illuminate\View\View;
 
@@ -159,20 +161,25 @@ class DashboardController extends Controller
     private function financialSnapshot(): array
     {
         $sales = (float) Order::where('payment_status', 'paid')->sum('total');
-        if ($sales <= 0) {
+        $expenses = (float) Expense::query()->sum('amount');
+        $purchaseSpend = (float) PurchaseOrder::query()
+            ->whereIn('status', ['sent', 'partial', 'received'])
+            ->sum('total_amount');
+        $cogs = $purchaseSpend > 0 ? $purchaseSpend : ($sales > 0 ? $sales * 0.39 : 0);
+        if ($sales <= 0 && $expenses <= 0) {
             $sales = 185420.50;
+            $cogs = $sales * 0.39;
+            $expenses = $sales * 0.15;
         }
-        $cogs = $sales * 0.39;
         $gross = $sales - $cogs;
-        $expenses = $sales * 0.15;
         $net = $gross - $expenses;
 
         return [
             ['label' => 'Total Sales', 'value' => '৳ '.number_format($sales, 2)],
             ['label' => 'Cost of Goods Sold', 'value' => '৳ '.number_format($cogs, 2)],
-            ['label' => 'Gross Profit', 'value' => '৳ '.number_format($gross, 2), 'meta' => number_format(($gross / $sales) * 100, 1).'%'],
+            ['label' => 'Gross Profit', 'value' => '৳ '.number_format($gross, 2), 'meta' => $sales > 0 ? number_format(($gross / $sales) * 100, 1).'%' : '—'],
             ['label' => 'Total Expenses', 'value' => '৳ '.number_format($expenses, 2)],
-            ['label' => 'Net Profit', 'value' => '৳ '.number_format($net, 2), 'meta' => number_format(($net / $sales) * 100, 1).'%', 'highlight' => true],
+            ['label' => 'Net Profit', 'value' => '৳ '.number_format($net, 2), 'meta' => $sales > 0 ? number_format(($net / $sales) * 100, 1).'%' : '—', 'highlight' => true],
         ];
     }
 
@@ -218,11 +225,29 @@ class DashboardController extends Controller
 
     private function staffPerformance(): array
     {
+        $total = User::count();
+        $active = User::where('status', 'active')->count();
+        $presentPct = $total > 0 ? (int) round(($active / $total) * 100) : 0;
+        $paidSales = (float) Order::where('payment_status', 'paid')->whereDate('placed_at', today())->sum('total');
+        $paidOrders = Order::where('payment_status', 'paid')->whereDate('placed_at', today())->count();
+        $salesPerStaff = $active > 0 ? $paidSales / $active : 0;
+        $ordersPerStaff = $active > 0 ? $paidOrders / $active : 0;
+        $salaryExpenses = (float) Expense::query()
+            ->where('category', 'salaries')
+            ->whereMonth('expense_date', now()->month)
+            ->whereYear('expense_date', now()->year)
+            ->sum('amount');
+        $monthSales = (float) Order::where('payment_status', 'paid')
+            ->whereMonth('placed_at', now()->month)
+            ->whereYear('placed_at', now()->year)
+            ->sum('total');
+        $laborPct = $monthSales > 0 ? ($salaryExpenses / $monthSales) * 100 : 0;
+
         return [
-            ['label' => 'Present', 'value' => '28/32', 'pct' => 87, 'change' => null],
-            ['label' => 'Sales / Staff', 'value' => '৳ 6,622', 'pct' => 74, 'change' => '+12%'],
-            ['label' => 'Orders / Staff', 'value' => '15.6', 'pct' => 68, 'change' => '+8%'],
-            ['label' => 'Labor Cost %', 'value' => '21.6%', 'pct' => 42, 'change' => '-3%'],
+            ['label' => 'Present', 'value' => $active.'/'.max($total, 1), 'pct' => max(5, min(100, $presentPct ?: 5)), 'change' => null],
+            ['label' => 'Sales / Staff', 'value' => '৳ '.number_format($salesPerStaff, 0), 'pct' => max(5, min(100, (int) ($salesPerStaff > 0 ? 74 : 5))), 'change' => null],
+            ['label' => 'Orders / Staff', 'value' => number_format($ordersPerStaff, 1), 'pct' => max(5, min(100, (int) ($ordersPerStaff > 0 ? 68 : 5))), 'change' => null],
+            ['label' => 'Labor Cost %', 'value' => number_format($laborPct, 1).'%', 'pct' => max(5, min(100, (int) round($laborPct ?: 5))), 'change' => null],
         ];
     }
 

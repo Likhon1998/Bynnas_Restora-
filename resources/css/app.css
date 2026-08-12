@@ -71,6 +71,23 @@
     }
 }
 
+/* Homepage / marketing section rhythm — moderate, professional breathing room */
+.section-pad {
+    padding-block: 3.75rem; /* ~60px */
+}
+
+@media (min-width: 768px) {
+    .section-pad {
+        padding-block: 4.75rem; /* ~76px */
+    }
+}
+
+@media (min-width: 1024px) {
+    .section-pad {
+        padding-block: 5.75rem; /* ~92px */
+    }
+}
+
 .logo-mark {
     display: inline-flex;
     flex-direction: column;
