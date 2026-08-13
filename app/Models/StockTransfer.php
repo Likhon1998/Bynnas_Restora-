@@ -9,7 +9,7 @@ class StockTransfer extends Model
 {
     protected $fillable = [
         'transfer_number', 'inventory_item_id', 'from_location_id', 'to_location_id',
-        'quantity', 'transfer_date', 'status', 'notes',
+        'quantity', 'transfer_date', 'status', 'ledger_applied', 'notes',
     ];
 
     protected function casts(): array
@@ -17,6 +17,7 @@ class StockTransfer extends Model
         return [
             'quantity' => 'decimal:3',
             'transfer_date' => 'date',
+            'ledger_applied' => 'boolean',
         ];
     }
 

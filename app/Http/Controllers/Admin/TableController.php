@@ -14,6 +14,7 @@ class TableController extends Controller
     public function index(): View
     {
         $tables = RestaurantTable::orderBy('code')->get();
+        $tables->each->ensureQrToken();
         $legend = collect(['seated', 'ordered', 'preparing', 'ready', 'waiting', 'available'])
             ->map(fn ($status) => [
                 'label' => ucfirst($status),
@@ -71,6 +72,27 @@ class TableController extends Controller
         $table->delete();
 
         return redirect()->route('admin.tables.index')->with('success', 'Table deleted.');
+    }
+
+    public function qr(RestaurantTable $table): View
+    {
+        $table->ensureQrToken();
+
+        return view('admin.tables.qr', [
+            'user' => auth()->user(),
+            'nav' => AdminNav::withActive('tables'),
+            'icons' => AdminNav::icons(),
+            'table' => $table->fresh(),
+        ]);
+    }
+
+    public function refreshQr(RestaurantTable $table): RedirectResponse
+    {
+        $table->refreshQrToken();
+
+        return redirect()
+            ->route('admin.tables.qr', $table)
+            ->with('success', 'QR code regenerated. Print and replace the old sticker.');
     }
 
     private function validated(Request $request, ?int $id = null): array

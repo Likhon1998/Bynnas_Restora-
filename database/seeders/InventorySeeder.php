@@ -96,18 +96,26 @@ class InventorySeeder extends Seeder
             ['purchase_order_id' => $po4->id, 'inventory_item_id' => $itemMap['INV-OIL']->id, 'quantity' => 4, 'unit_cost' => 1200, 'received_qty' => 0, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
+        $kitchenId = \App\Models\Location::query()->where('name', 'Main Kitchen')->value('id');
+        $storageId = \App\Models\Location::query()->where('name', 'Storage')->value('id');
+
         StockTransfer::query()->updateOrCreate(
             ['transfer_number' => 'ST-'.now()->format('ymd').'-001'],
             [
                 'inventory_item_id' => $itemMap['INV-RICE']->id,
-                'from_location' => 'Storage',
-                'to_location' => 'Main Kitchen',
+                'from_location_id' => $storageId,
+                'to_location_id' => $kitchenId,
                 'quantity' => 5,
                 'transfer_date' => now()->subDay(),
                 'status' => 'completed',
+                'ledger_applied' => false,
                 'notes' => 'Dinner prep restock',
             ]
         );
+
+        // Link recipes to matching menu dishes when present.
+        \App\Models\MenuItem::query()->where('name', 'Grilled Salmon')->update(['recipe_id' => $salmon->id]);
+        \App\Models\MenuItem::query()->where('name', 'Truffle Pasta')->update(['recipe_id' => $pasta->id]);
 
         WastageRecord::query()->updateOrCreate(
             [

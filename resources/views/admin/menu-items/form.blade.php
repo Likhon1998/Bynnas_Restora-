@@ -26,6 +26,14 @@
                 </datalist>
             </label>
             <label>Price (৳)<input class="field" type="number" step="0.01" min="0" name="price" value="{{ old('price', $menuItem->price) }}" required></label>
+            <label>Recipe (stock consumption)
+                <select class="field" name="recipe_id">
+                    <option value="">— None —</option>
+                    @foreach ($recipes as $recipe)
+                        <option value="{{ $recipe->id }}" @selected((string) old('recipe_id', $menuItem->recipe_id) === (string) $recipe->id)>{{ $recipe->name }}@if($recipe->code) ({{ $recipe->code }})@endif</option>
+                    @endforeach
+                </select>
+            </label>
             <label>Sort Order<input class="field" type="number" min="0" name="sort_order" value="{{ old('sort_order', $menuItem->sort_order) }}"></label>
             <label>Badge
                 <select class="field" name="badge">

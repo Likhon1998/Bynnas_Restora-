@@ -5,7 +5,10 @@ namespace App\Services;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\Location;
+use App\Models\Order;
+use App\Models\StockTransfer;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -149,6 +152,294 @@ class InventoryService
         }
 
         return (int) $fallback;
+    }
+
+    /**
+     * Deduct recipe ingredients for a sold/committed order (idempotent).
+     * Menu lines without a recipe are skipped.
+     */
+    public function consumeOrder(Order $order): void
+    {
+        if ($order->inventory_deducted) {
+            return;
+        }
+
+        $order->loadMissing(['items.menuItem.recipe.ingredients.inventoryItem']);
+
+        $requirements = $this->aggregateOrderRequirements($order);
+        if ($requirements === []) {
+            $order->forceFill(['inventory_deducted' => true])->save();
+
+            return;
+        }
+
+        $shortages = [];
+        foreach ($requirements as $row) {
+            /** @var InventoryItem $item */
+            $item = $row['item'];
+            $need = (float) $row['quantity'];
+            $onHand = (float) $item->quantity_on_hand;
+            if ($onHand + 0.0005 < $need) {
+                $unit = $item->base_unit ?: $item->unit;
+                $shortages[] = sprintf(
+                    '%s needs %s %s (on hand %s)',
+                    $item->name,
+                    rtrim(rtrim(number_format($need, 3, '.', ''), '0'), '.'),
+                    $unit,
+                    rtrim(rtrim(number_format($onHand, 3, '.', ''), '0'), '.')
+                );
+            }
+        }
+
+        if ($shortages !== []) {
+            throw ValidationException::withMessages([
+                'inventory' => 'Insufficient stock: '.implode('; ', $shortages),
+            ]);
+        }
+
+        DB::transaction(function () use ($order, $requirements) {
+            foreach ($requirements as $row) {
+                /** @var InventoryItem $item */
+                $item = $row['item'];
+                $qty = (float) $row['quantity'];
+                $locationId = $this->resolveLocationId($item);
+
+                $this->recordTransaction(
+                    inventoryItemId: $item->id,
+                    locationId: $locationId,
+                    type: InventoryTransaction::TYPE_POS_SALE,
+                    quantityChange: -abs($qty),
+                    referenceType: Order::class,
+                    referenceId: $order->id,
+                    notes: 'Sale '.$order->order_number,
+                );
+            }
+
+            $order->forceFill(['inventory_deducted' => true])->save();
+        });
+    }
+
+    /**
+     * Restore stock previously deducted for an order (idempotent).
+     */
+    public function restoreOrder(Order $order): void
+    {
+        if (! $order->inventory_deducted) {
+            return;
+        }
+
+        DB::transaction(function () use ($order) {
+            $sales = InventoryTransaction::query()
+                ->where('reference_type', Order::class)
+                ->where('reference_id', $order->id)
+                ->where('type', InventoryTransaction::TYPE_POS_SALE)
+                ->where('quantity_change', '<', 0)
+                ->get();
+
+            foreach ($sales as $sale) {
+                $alreadyRestored = InventoryTransaction::query()
+                    ->where('reference_type', Order::class)
+                    ->where('reference_id', $order->id)
+                    ->where('type', InventoryTransaction::TYPE_ADJUSTMENT)
+                    ->where('inventory_item_id', $sale->inventory_item_id)
+                    ->where('notes', 'like', 'Reversal:%')
+                    ->exists();
+
+                if ($alreadyRestored) {
+                    continue;
+                }
+
+                $this->recordTransaction(
+                    inventoryItemId: (int) $sale->inventory_item_id,
+                    locationId: (int) $sale->location_id,
+                    type: InventoryTransaction::TYPE_ADJUSTMENT,
+                    quantityChange: abs((float) $sale->quantity_change),
+                    referenceType: Order::class,
+                    referenceId: $order->id,
+                    notes: 'Reversal: cancelled '.$order->order_number,
+                );
+            }
+
+            $order->forceFill(['inventory_deducted' => false])->save();
+        });
+    }
+
+    /**
+     * Move stock between locations for a completed transfer (idempotent).
+     */
+    public function applyCompletedTransfer(StockTransfer $transfer): void
+    {
+        if ($transfer->status !== 'completed') {
+            return;
+        }
+
+        if ($transfer->ledger_applied) {
+            return;
+        }
+
+        $qty = abs((float) $transfer->quantity);
+        if ($qty < 0.0005) {
+            return;
+        }
+
+        if ((int) $transfer->from_location_id === (int) $transfer->to_location_id) {
+            throw ValidationException::withMessages([
+                'to_location_id' => 'From and to locations must be different.',
+            ]);
+        }
+
+        $item = InventoryItem::query()->findOrFail($transfer->inventory_item_id);
+
+        $hasLedger = InventoryTransaction::query()
+            ->where('inventory_item_id', $item->id)
+            ->exists();
+
+        if ($hasLedger) {
+            $fromQty = (float) InventoryTransaction::query()
+                ->where('inventory_item_id', $item->id)
+                ->where('location_id', $transfer->from_location_id)
+                ->sum('quantity_change');
+        } else {
+            $defaultId = $item->default_location_id
+                ? (int) $item->default_location_id
+                : $this->resolveLocationId($item);
+            $fromQty = ((int) $transfer->from_location_id === $defaultId)
+                ? (float) $item->quantity_on_hand
+                : 0.0;
+        }
+
+        if ($fromQty + 0.0005 < $qty) {
+            throw ValidationException::withMessages([
+                'quantity' => sprintf(
+                    'Insufficient stock at source location (available %s).',
+                    rtrim(rtrim(number_format($fromQty, 3, '.', ''), '0'), '.')
+                ),
+            ]);
+        }
+
+        DB::transaction(function () use ($transfer, $qty) {
+            $this->recordTransaction(
+                inventoryItemId: (int) $transfer->inventory_item_id,
+                locationId: (int) $transfer->from_location_id,
+                type: InventoryTransaction::TYPE_TRANSFER_OUT,
+                quantityChange: -$qty,
+                referenceType: StockTransfer::class,
+                referenceId: $transfer->id,
+                notes: 'Transfer out '.$transfer->transfer_number,
+            );
+
+            $this->recordTransaction(
+                inventoryItemId: (int) $transfer->inventory_item_id,
+                locationId: (int) $transfer->to_location_id,
+                type: InventoryTransaction::TYPE_TRANSFER_IN,
+                quantityChange: $qty,
+                referenceType: StockTransfer::class,
+                referenceId: $transfer->id,
+                notes: 'Transfer in '.$transfer->transfer_number,
+            );
+
+            $transfer->forceFill(['ledger_applied' => true])->save();
+        });
+    }
+
+    /**
+     * Undo ledger rows for a completed transfer (idempotent).
+     */
+    public function reverseCompletedTransfer(StockTransfer $transfer): void
+    {
+        if (! $transfer->ledger_applied) {
+            return;
+        }
+
+        DB::transaction(function () use ($transfer) {
+            $rows = InventoryTransaction::query()
+                ->where('reference_type', StockTransfer::class)
+                ->where('reference_id', $transfer->id)
+                ->whereIn('type', [
+                    InventoryTransaction::TYPE_TRANSFER_IN,
+                    InventoryTransaction::TYPE_TRANSFER_OUT,
+                ])
+                ->orderByDesc('id')
+                ->limit(2)
+                ->get();
+
+            // Reverse the latest in/out pair for this transfer.
+            foreach ($rows as $row) {
+                $this->recordTransaction(
+                    inventoryItemId: (int) $row->inventory_item_id,
+                    locationId: (int) $row->location_id,
+                    type: InventoryTransaction::TYPE_ADJUSTMENT,
+                    quantityChange: -1 * (float) $row->quantity_change,
+                    referenceType: StockTransfer::class,
+                    referenceId: $transfer->id,
+                    notes: 'Reversal: '.$transfer->transfer_number,
+                );
+            }
+
+            $transfer->forceFill(['ledger_applied' => false])->save();
+        });
+    }
+
+    /**
+     * Post opening stock for a newly created item.
+     */
+    public function postOpeningBalance(InventoryItem $item, float $quantity, ?int $locationId = null): void
+    {
+        $qty = abs($quantity);
+        if ($qty < 0.0005) {
+            return;
+        }
+
+        $locationId = $this->resolveLocationId($item, $locationId);
+
+        $this->recordTransaction(
+            inventoryItemId: $item->id,
+            locationId: $locationId,
+            type: InventoryTransaction::TYPE_ADJUSTMENT,
+            quantityChange: $qty,
+            referenceType: InventoryItem::class,
+            referenceId: $item->id,
+            notes: 'Opening balance',
+        );
+    }
+
+    /**
+     * @return array<int, array{item: InventoryItem, quantity: float}>
+     */
+    private function aggregateOrderRequirements(Order $order): array
+    {
+        $needs = [];
+
+        foreach ($order->items as $line) {
+            $menu = $line->menuItem;
+            $recipe = $menu?->recipe;
+            if (! $recipe || $recipe->status !== 'active') {
+                continue;
+            }
+
+            $yield = max(1, (int) $recipe->yield_qty);
+            $portions = (int) $line->quantity;
+            $factor = $portions / $yield;
+
+            foreach ($recipe->ingredients as $ingredient) {
+                $item = $ingredient->inventoryItem;
+                if (! $item) {
+                    continue;
+                }
+
+                $qty = $item->toCostUnits((float) $ingredient->quantity, $ingredient->unit) * $factor;
+                if ($qty < 0.0005) {
+                    continue;
+                }
+
+                if (! isset($needs[$item->id])) {
+                    $needs[$item->id] = ['item' => $item, 'quantity' => 0.0];
+                }
+                $needs[$item->id]['quantity'] += $qty;
+            }
+        }
+
+        return $needs;
     }
 
     /**

@@ -11,13 +11,16 @@ class Recipe extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'name', 'code', 'yield_qty', 'yield_unit', 'selling_price', 'notes', 'status',
+        'name', 'code', 'yield_qty', 'yield_unit', 'selling_price',
+        'packaging_cost', 'other_cost', 'notes', 'status',
     ];
 
     protected function casts(): array
     {
         return [
             'selling_price' => 'decimal:2',
+            'packaging_cost' => 'decimal:2',
+            'other_cost' => 'decimal:2',
         ];
     }
 
@@ -26,12 +29,42 @@ class Recipe extends Model
         return $this->hasMany(RecipeIngredient::class);
     }
 
+    public function menuItems(): HasMany
+    {
+        return $this->hasMany(MenuItem::class);
+    }
+
     public function foodCost(): float
     {
         return (float) $this->ingredients->sum(function (RecipeIngredient $row) {
-            $cost = (float) ($row->inventoryItem?->unit_cost ?? 0);
+            $item = $row->inventoryItem;
+            if (! $item) {
+                return 0;
+            }
 
-            return $cost * (float) $row->quantity;
+            return $item->costForQuantity((float) $row->quantity, $row->unit);
         });
+    }
+
+    public function totalCost(): float
+    {
+        return $this->foodCost() + (float) $this->packaging_cost + (float) $this->other_cost;
+    }
+
+    public function costPerPortion(): float
+    {
+        $yield = max(1, (int) $this->yield_qty);
+
+        return $this->totalCost() / $yield;
+    }
+
+    public function profitMargin(): float
+    {
+        $price = (float) $this->selling_price;
+        if ($price <= 0) {
+            return 0.0;
+        }
+
+        return (($price - $this->costPerPortion()) / $price) * 100;
     }
 }

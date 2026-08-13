@@ -8,12 +8,17 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\SiteSetting;
 use App\Models\TaxSetting;
+use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class WebOrderController extends Controller
 {
+    public function __construct(private readonly InventoryService $inventory)
+    {
+    }
+
     public function store(Request $request): JsonResponse
     {
         $settings = SiteSetting::current();
@@ -86,6 +91,8 @@ class WebOrderController extends Controller
             foreach ($lines as $line) {
                 OrderItem::create(array_merge($line, ['order_id' => $order->id]));
             }
+
+            $this->inventory->consumeOrder($order->fresh(['items.menuItem.recipe.ingredients.inventoryItem']));
         });
 
         return response()->json([

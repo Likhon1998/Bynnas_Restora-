@@ -27,7 +27,12 @@
                 </select>
             </label>
         </div>
-        <div class="form-actions"><button class="btn btn-gold" type="submit">Save Table</button></div>
+        <div class="form-actions">
+            <button class="btn btn-gold" type="submit">Save Table</button>
+            @if ($mode === 'edit' && $table->id)
+                <a class="btn" href="{{ route('admin.tables.qr', $table) }}">View QR</a>
+            @endif
+        </div>
     </form>
 </section>
 @endsection

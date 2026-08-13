@@ -11,8 +11,9 @@ class Order extends Model
     protected $fillable = [
         'order_number', 'type', 'status', 'table_id', 'customer_id', 'customer_name',
         'customer_phone', 'meta', 'guest_count', 'subtotal', 'service_charge', 'tax_amount', 'tip_amount',
-        'promo_code', 'discount_amount', 'total', 'payment_status', 'is_held',
-        'notes', 'tags', 'placed_at',
+        'promo_code', 'discount_amount', 'total', 'payment_status', 'payment_method',
+        'cash_paid', 'bkash_paid', 'card_paid', 'amount_tendered', 'change_amount',
+        'is_held', 'inventory_deducted', 'notes', 'tags', 'placed_at',
     ];
 
     protected function casts(): array
@@ -24,7 +25,13 @@ class Order extends Model
             'tip_amount' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'total' => 'decimal:2',
+            'cash_paid' => 'decimal:2',
+            'bkash_paid' => 'decimal:2',
+            'card_paid' => 'decimal:2',
+            'amount_tendered' => 'decimal:2',
+            'change_amount' => 'decimal:2',
             'is_held' => 'boolean',
+            'inventory_deducted' => 'boolean',
             'tags' => 'array',
             'placed_at' => 'datetime',
         ];

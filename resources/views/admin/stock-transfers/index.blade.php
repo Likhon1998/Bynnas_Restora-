@@ -32,7 +32,7 @@
                     <tr>
                         <td><strong>{{ $transfer->transfer_number }}</strong></td>
                         <td>{{ $transfer->inventoryItem?->name }}</td>
-                        <td>{{ $transfer->from_location }} → {{ $transfer->to_location }}</td>
+                        <td>{{ $transfer->fromLocation?->name }} → {{ $transfer->toLocation?->name }}</td>
                         <td>{{ rtrim(rtrim(number_format((float)$transfer->quantity, 3, '.', ''), '0'), '.') }}</td>
                         <td>{{ $transfer->transfer_date?->format('M d, Y') }}</td>
                         <td><span class="pill {{ $transfer->status === 'completed' ? 'green' : ($transfer->status === 'pending' ? 'amber' : 'slate') }}">{{ ucfirst($transfer->status) }}</span></td>

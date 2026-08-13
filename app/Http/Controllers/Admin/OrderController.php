@@ -6,13 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\RestaurantTable;
+use App\Services\InventoryService;
 use App\Support\AdminNav;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class OrderController extends Controller
 {
+    public function __construct(private readonly InventoryService $inventory)
+    {
+    }
+
     public function index(Request $request): View
     {
         $type = $request->get('type');
@@ -75,36 +81,54 @@ class OrderController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $order->update($data);
+        DB::transaction(function () use ($order, $data) {
+            $previousStatus = $order->status;
+            $order->update($data);
 
-        if (! empty($data['table_id'])) {
-            $tableStatus = match ($data['status']) {
-                'ready' => 'ready',
-                'preparing', 'pending' => 'preparing',
-                'completed', 'cancelled' => 'available',
-                default => 'ordered',
-            };
-            RestaurantTable::whereKey($data['table_id'])->update(['status' => $tableStatus]);
-        }
-
-        if ($data['status'] === 'completed' && $data['payment_status'] === 'paid' && $order->customer_id) {
-            $customer = Customer::find($order->customer_id);
-            if ($customer) {
-                $points = (int) floor((float) $order->total / 100);
-                if ($points > 0) {
-                    $customer->loyalty_points += $points;
-                    $customer->lifetime_spend = (float) $customer->lifetime_spend + (float) $order->total;
-                    $customer->save();
+            if ($data['status'] === 'cancelled' && $previousStatus !== 'cancelled') {
+                $this->inventory->restoreOrder($order->fresh());
+            } elseif ($data['status'] !== 'cancelled' && ! $order->inventory_deducted) {
+                // Kitchen / paid path: deduct once if the order is moving forward.
+                if (in_array($data['status'], ['preparing', 'ready', 'on_the_way', 'completed'], true)
+                    || $data['payment_status'] === 'paid') {
+                    $this->inventory->consumeOrder(
+                        $order->fresh(['items.menuItem.recipe.ingredients.inventoryItem'])
+                    );
                 }
             }
-        }
+
+            if (! empty($data['table_id'])) {
+                $tableStatus = match ($data['status']) {
+                    'ready' => 'ready',
+                    'preparing', 'pending' => 'preparing',
+                    'completed', 'cancelled' => 'available',
+                    default => 'ordered',
+                };
+                RestaurantTable::whereKey($data['table_id'])->update(['status' => $tableStatus]);
+            }
+
+            if ($data['status'] === 'completed' && $data['payment_status'] === 'paid' && $order->customer_id) {
+                $customer = Customer::find($order->customer_id);
+                if ($customer) {
+                    $points = (int) floor((float) $order->total / 100);
+                    if ($points > 0) {
+                        $customer->loyalty_points += $points;
+                        $customer->lifetime_spend = (float) $customer->lifetime_spend + (float) $order->total;
+                        $customer->save();
+                    }
+                }
+            }
+        });
 
         return redirect()->route('admin.orders.index')->with('success', 'Order updated.');
     }
 
     public function destroy(Order $order): RedirectResponse
     {
-        $order->delete();
+        DB::transaction(function () use ($order) {
+            $this->inventory->restoreOrder($order);
+            $order->delete();
+        });
 
         return redirect()->route('admin.orders.index')->with('success', 'Order deleted.');
     }

@@ -83,4 +83,31 @@ class InventoryItem extends Model
 
         return $rate > 0 ? $baseQty / $rate : $baseQty;
     }
+
+    /** Unit that unit_cost / quantity_on_hand are expressed in. */
+    public function costUnit(): string
+    {
+        return (string) ($this->purchase_unit ?: $this->unit ?: 'unit');
+    }
+
+    /**
+     * Convert a recipe quantity into this item's cost/stock unit.
+     * Falls back to raw qty when units are missing or incompatible.
+     */
+    public function toCostUnits(float $quantity, ?string $quantityUnit): float
+    {
+        $converted = \App\Support\UnitConverter::convert(
+            $quantity,
+            $quantityUnit ?: $this->costUnit(),
+            $this->costUnit()
+        );
+
+        return $converted ?? $quantity;
+    }
+
+    /** Food cost for a recipe line qty expressed in $quantityUnit. */
+    public function costForQuantity(float $quantity, ?string $quantityUnit = null): float
+    {
+        return $this->toCostUnits($quantity, $quantityUnit) * (float) $this->unit_cost;
+    }
 }

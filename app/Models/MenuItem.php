@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MenuItem extends Model
 {
     protected $fillable = [
-        'name', 'category', 'description', 'price', 'is_available', 'image_url',
+        'name', 'category', 'recipe_id', 'description', 'price', 'is_available', 'image_url',
         'badge', 'is_favorite', 'is_bestseller', 'is_vegetarian', 'sort_order',
         'rating', 'review_count',
     ];
@@ -28,5 +29,10 @@ class MenuItem extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function recipe(): BelongsTo
+    {
+        return $this->belongsTo(Recipe::class);
     }
 }

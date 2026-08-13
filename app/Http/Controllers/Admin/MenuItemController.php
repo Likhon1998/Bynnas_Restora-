@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\MenuItem;
+use App\Models\Recipe;
 use App\Support\AdminNav;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class MenuItemController extends Controller
             'user' => auth()->user(),
             'nav' => AdminNav::withActive('menu-items'),
             'icons' => AdminNav::icons(),
-            'menuItems' => MenuItem::orderBy('sort_order')->orderBy('name')->get(),
+            'menuItems' => MenuItem::with('recipe')->orderBy('sort_order')->orderBy('name')->get(),
             'categories' => MenuItem::query()->whereNotNull('category')->distinct()->pluck('category'),
         ]);
     }
@@ -29,6 +30,7 @@ class MenuItemController extends Controller
             'nav' => AdminNav::withActive('menu-items'),
             'icons' => AdminNav::icons(),
             'menuItem' => new MenuItem(['is_available' => true, 'sort_order' => 0]),
+            'recipes' => Recipe::query()->where('status', 'active')->orderBy('name')->get(),
             'mode' => 'create',
             'categories' => $this->categoryOptions(),
         ]);
@@ -48,6 +50,7 @@ class MenuItemController extends Controller
             'nav' => AdminNav::withActive('menu-items'),
             'icons' => AdminNav::icons(),
             'menuItem' => $menuItem,
+            'recipes' => Recipe::query()->where('status', 'active')->orderBy('name')->get(),
             'mode' => 'edit',
             'categories' => $this->categoryOptions(),
         ]);
@@ -72,6 +75,7 @@ class MenuItemController extends Controller
         return $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'category' => ['nullable', 'string', 'max:60'],
+            'recipe_id' => ['nullable', 'exists:recipes,id'],
             'description' => ['nullable', 'string', 'max:500'],
             'price' => ['required', 'numeric', 'min:0'],
             'image_url' => ['nullable', 'url', 'max:500'],
@@ -88,6 +92,7 @@ class MenuItemController extends Controller
             'is_favorite' => $request->boolean('is_favorite'),
             'is_bestseller' => $request->boolean('is_bestseller'),
             'is_vegetarian' => $request->boolean('is_vegetarian'),
+            'recipe_id' => $request->filled('recipe_id') ? $request->integer('recipe_id') : null,
         ];
     }
 

@@ -26,6 +26,7 @@
                     <th>Yield</th>
                     <th>Ingredients</th>
                     <th>Food cost</th>
+                    <th>Cost / portion</th>
                     <th>Sell price</th>
                     <th>Status</th>
                     <th></th>
@@ -33,14 +34,27 @@
             </thead>
             <tbody>
                 @forelse ($recipes as $recipe)
-                    @php $cost = $recipe->foodCost(); @endphp
+                    @php
+                        $cost = $recipe->foodCost();
+                        $per = $recipe->costPerPortion();
+                        $margin = $recipe->profitMargin();
+                        $statusTone = match ($recipe->status) {
+                            'active' => 'green',
+                            'draft' => 'amber',
+                            default => 'slate',
+                        };
+                    @endphp
                     <tr>
                         <td><strong>{{ $recipe->name }}</strong><small class="muted">{{ $recipe->code }}</small></td>
                         <td>{{ $recipe->yield_qty }} {{ $recipe->yield_unit }}</td>
                         <td>{{ $recipe->ingredients_count }}</td>
                         <td>৳ {{ number_format($cost, 2) }}</td>
+                        <td>
+                            ৳ {{ number_format($per, 2) }}
+                            <small class="muted">{{ number_format($margin, 1) }}% margin</small>
+                        </td>
                         <td>৳ {{ number_format((float)$recipe->selling_price, 2) }}</td>
-                        <td><span class="pill {{ $recipe->status === 'active' ? 'green' : 'slate' }}">{{ ucfirst($recipe->status) }}</span></td>
+                        <td><span class="pill {{ $statusTone }}">{{ ucfirst($recipe->status) }}</span></td>
                         <td class="actions">
                             <a class="btn" href="{{ route('admin.recipes.edit', $recipe) }}">Edit</a>
                             <form method="POST" action="{{ route('admin.recipes.destroy', $recipe) }}" onsubmit="return confirm('Delete recipe?')">
@@ -50,7 +64,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="empty">No recipes yet.</td></tr>
+                    <tr><td colspan="8" class="empty">No recipes yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

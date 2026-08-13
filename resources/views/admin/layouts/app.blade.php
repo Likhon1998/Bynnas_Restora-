@@ -61,7 +61,7 @@
 
     <div class="main">
         <header class="topbar">
-            <button type="button" class="menu-btn" id="menuBtn" aria-label="Menu">
+            <button type="button" class="menu-btn" id="menuBtn" aria-label="Toggle sidebar" aria-controls="sidebar" aria-expanded="true">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
 
@@ -75,7 +75,7 @@
                 <a href="{{ route('admin.pos.index') }}" target="_blank" rel="noopener" class="btn btn-green">+ New Order</a>
                 <a href="{{ route('admin.reservations.create') }}" class="btn btn-blue">Reservation</a>
                 <a href="{{ route('admin.pos.index') }}?type=walkin" target="_blank" rel="noopener" class="btn btn-orange">Walk-in</a>
-                <a href="{{ route('admin.pos.index') }}?type=qr" target="_blank" rel="noopener" class="btn btn-purple">QR Order</a>
+                <a href="{{ route('admin.tables.index') }}#qr-codes" class="btn btn-purple">QR Order</a>
 
                 <button type="button" class="icon-btn" aria-label="Notifications">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
@@ -149,10 +149,69 @@
     var btn = document.getElementById('menuBtn');
     var side = document.getElementById('sidebar');
     var overlay = document.getElementById('overlay');
-    function close() { side.classList.remove('open'); overlay.classList.remove('open'); }
-    function open() { side.classList.add('open'); overlay.classList.add('open'); }
-    if (btn) btn.addEventListener('click', function () { side.classList.contains('open') ? close() : open(); });
-    if (overlay) overlay.addEventListener('click', close);
+    var shell = document.querySelector('.shell');
+    var storageKey = 'bynnas.admin.sidebarCollapsed';
+    var mq = window.matchMedia('(max-width: 1100px)');
+
+    function isMobile() {
+        return mq.matches;
+    }
+
+    function setExpandedAttr(expanded) {
+        if (btn) btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+
+    function closeMobile() {
+        if (!side || !overlay) return;
+        side.classList.remove('open');
+        overlay.classList.remove('open');
+        setExpandedAttr(false);
+    }
+
+    function openMobile() {
+        if (!side || !overlay) return;
+        side.classList.add('open');
+        overlay.classList.add('open');
+        setExpandedAttr(true);
+    }
+
+    function applyDesktopCollapse(collapsed) {
+        if (!shell) return;
+        shell.classList.toggle('sidebar-collapsed', !!collapsed);
+        try { localStorage.setItem(storageKey, collapsed ? '1' : '0'); } catch (e) {}
+        setExpandedAttr(!collapsed);
+    }
+
+    function syncForViewport() {
+        if (isMobile()) {
+            if (shell) shell.classList.remove('sidebar-collapsed');
+            closeMobile();
+        } else {
+            if (side) side.classList.remove('open');
+            if (overlay) overlay.classList.remove('open');
+            var saved = false;
+            try { saved = localStorage.getItem(storageKey) === '1'; } catch (e) {}
+            applyDesktopCollapse(saved);
+        }
+    }
+
+    if (btn && side && shell) {
+        btn.addEventListener('click', function () {
+            if (isMobile()) {
+                side.classList.contains('open') ? closeMobile() : openMobile();
+                return;
+            }
+            applyDesktopCollapse(!shell.classList.contains('sidebar-collapsed'));
+        });
+    }
+    if (overlay) overlay.addEventListener('click', closeMobile);
+
+    if (mq.addEventListener) {
+        mq.addEventListener('change', syncForViewport);
+    } else if (mq.addListener) {
+        mq.addListener(syncForViewport);
+    }
+    syncForViewport();
 
     var userMenu = document.getElementById('userMenu');
     var userBtn = document.getElementById('userMenuBtn');

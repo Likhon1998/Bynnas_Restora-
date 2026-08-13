@@ -23,10 +23,21 @@
             <label>Name<input class="field" name="name" value="{{ old('name', $item->name) }}" required></label>
             <label>Category<input class="field" name="category" value="{{ old('category', $item->category) }}"></label>
             <label>Unit<input class="field" name="unit" value="{{ old('unit', $item->unit) }}" required></label>
-            <label>Qty on hand<input class="field" type="number" step="0.001" name="quantity_on_hand" value="{{ old('quantity_on_hand', $item->quantity_on_hand) }}" required></label>
+            @if ($mode === 'create')
+                <label>Opening qty<input class="field" type="number" step="0.001" name="quantity_on_hand" value="{{ old('quantity_on_hand', $item->quantity_on_hand ?? 0) }}" required></label>
+            @else
+                <label>Qty on hand<input class="field" type="number" step="0.001" value="{{ $item->quantity_on_hand }}" disabled title="Updated via PO, sales, transfers, wastage"></label>
+            @endif
             <label>Reorder level<input class="field" type="number" step="0.001" name="reorder_level" value="{{ old('reorder_level', $item->reorder_level) }}" required></label>
             <label>Unit cost (৳)<input class="field" type="number" step="0.01" name="unit_cost" value="{{ old('unit_cost', $item->unit_cost) }}" required></label>
-            <label>Location<input class="field" name="location" value="{{ old('location', $item->location) }}"></label>
+            <label>Default location
+                <select class="field" name="default_location_id">
+                    <option value="">— None —</option>
+                    @foreach ($locations as $location)
+                        <option value="{{ $location->id }}" @selected((string) old('default_location_id', $item->default_location_id) === (string) $location->id)>{{ $location->name }}</option>
+                    @endforeach
+                </select>
+            </label>
             <label>Supplier
                 <select class="field" name="supplier_id">
                     <option value="">— None —</option>

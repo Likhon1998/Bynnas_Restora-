@@ -25,8 +25,22 @@
                     @endforeach
                 </select>
             </label>
-            <label>From<input class="field" name="from_location" value="{{ old('from_location', $transfer->from_location) }}" required></label>
-            <label>To<input class="field" name="to_location" value="{{ old('to_location', $transfer->to_location) }}" required></label>
+            <label>From
+                <select class="field" name="from_location_id" required>
+                    <option value="">Select location</option>
+                    @foreach ($locations as $location)
+                        <option value="{{ $location->id }}" @selected((string) old('from_location_id', $transfer->from_location_id) === (string) $location->id)>{{ $location->name }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <label>To
+                <select class="field" name="to_location_id" required>
+                    <option value="">Select location</option>
+                    @foreach ($locations as $location)
+                        <option value="{{ $location->id }}" @selected((string) old('to_location_id', $transfer->to_location_id) === (string) $location->id)>{{ $location->name }}</option>
+                    @endforeach
+                </select>
+            </label>
             <label>Quantity<input class="field" type="number" step="0.001" name="quantity" value="{{ old('quantity', $transfer->quantity) }}" required></label>
             <label>Date<input class="field" type="date" name="transfer_date" value="{{ old('transfer_date', optional($transfer->transfer_date)->format('Y-m-d') ?? $transfer->transfer_date) }}" required></label>
             <label>Status

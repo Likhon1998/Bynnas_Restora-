@@ -24,6 +24,7 @@
                 <tr>
                     <th>Item</th>
                     <th>Category</th>
+                    <th>Recipe</th>
                     <th>Price</th>
                     <th>Badge</th>
                     <th>Status</th>
@@ -47,6 +48,7 @@
                             </div>
                         </td>
                         <td>{{ $item->category ?? '—' }}</td>
+                        <td>{{ $item->recipe?->name ?? '—' }}</td>
                         <td>৳ {{ number_format((float) $item->price, 2) }}</td>
                         <td>{{ $item->badge ?? ($item->is_bestseller ? 'Bestseller' : '—') }}</td>
                         <td>
@@ -63,7 +65,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">No menu items yet. Add your first dish.</td></tr>
+                    <tr><td colspan="7">No menu items yet. Add your first dish.</td></tr>
                 @endforelse
             </tbody>
         </table>
