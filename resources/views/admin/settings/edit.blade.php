@@ -6,13 +6,32 @@
 <div class="page-head">
     <div>
         <h1>Website & Branding</h1>
-        <p>Everything below drives the public homepage, menu page, contact page, logo, and footer. Dishes come from Menu Items.</p>
+        <p>POS payment mode is at the top. The rest drives the public homepage, menu, and footer.</p>
     </div>
 </div>
 
 @if (session('success'))
     <div class="card" style="margin-bottom:12px;padding:12px 16px;border-color:#86efac;background:#f0fdf4">{{ session('success') }}</div>
 @endif
+
+<section class="card form-card" style="max-width:980px;margin-bottom:16px;border:1px solid #fdba74;background:#fff7ed">
+    <h3 class="card-title" style="margin-bottom:8px">POS · Pay-first restaurant</h3>
+    <p class="muted" style="margin:0 0 14px">Guests must pay before kitchen receives the order. Same switch is on the POS top bar.</p>
+    <form method="POST" action="{{ route('admin.settings.pay-first') }}" id="payFirstForm">
+        @csrf
+        <input type="hidden" name="pay_first" value="0">
+        <label class="pay-first-admin" style="display:inline-flex;align-items:center;gap:12px;cursor:pointer;background:#fff;border:1px solid #fdba74;border-radius:14px;padding:10px 14px">
+            <span style="font-weight:800">Pay first</span>
+            <span style="position:relative;width:48px;height:28px;flex-shrink:0">
+                <input type="checkbox" name="pay_first" value="1" id="payFirstAdmin" @checked(old('pay_first', $settings->pay_first)) onchange="this.form.submit()" style="position:absolute;opacity:0;width:48px;height:28px;margin:0;cursor:pointer">
+                <span style="display:block;width:48px;height:28px;border-radius:999px;background:{{ ($settings->pay_first ?? false) ? '#f28c28' : '#cbd5e1' }};position:relative">
+                    <span style="position:absolute;top:3px;left:{{ ($settings->pay_first ?? false) ? '23px' : '3px' }};width:22px;height:22px;border-radius:999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>
+                </span>
+            </span>
+            <strong style="color:{{ ($settings->pay_first ?? false) ? '#c2410c' : '#64748b' }}">{{ ($settings->pay_first ?? false) ? 'ON' : 'OFF' }}</strong>
+        </label>
+    </form>
+</section>
 
 <section class="card form-card" style="max-width:980px">
     <form method="POST" action="{{ route('admin.settings.update') }}">

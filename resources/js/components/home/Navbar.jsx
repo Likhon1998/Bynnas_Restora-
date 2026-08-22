@@ -88,7 +88,7 @@ export default function Navbar() {
             <div className="site-container flex h-[70px] items-center justify-between gap-4 lg:h-[76px]">
                 <Logo />
 
-                <nav className="hidden items-center gap-6 xl:flex" aria-label="Primary">
+                <nav className="hidden items-center gap-4 lg:flex xl:gap-6" aria-label="Primary">
                     {siteNavLinks.map((link) => {
                         const active = linkActive(link);
                         return (
@@ -137,7 +137,7 @@ export default function Navbar() {
                     ) : null}
                     <button
                         type="button"
-                        className="rounded-md p-2 text-white xl:hidden"
+                        className="rounded-md p-2 text-white lg:hidden"
                         aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
                         aria-expanded={mobileOpen}
                         onClick={() => setMobileOpen((v) => !v)}
@@ -148,8 +148,8 @@ export default function Navbar() {
             </div>
 
             <div
-                className={`overflow-hidden border-t border-white/10 bg-ink/98 transition-all duration-300 xl:hidden ${
-                    mobileOpen ? 'max-h-[420px] opacity-100' : 'max-h-0 opacity-0'
+                className={`overflow-hidden border-t border-white/10 bg-ink/98 transition-all duration-300 lg:hidden ${
+                    mobileOpen ? 'max-h-[520px] opacity-100' : 'max-h-0 opacity-0'
                 }`}
             >
                 <div className="site-container flex flex-col gap-1 py-4">

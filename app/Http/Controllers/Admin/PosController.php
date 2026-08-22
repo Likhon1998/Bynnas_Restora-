@@ -26,19 +26,23 @@ class PosController extends Controller
 
     public function index(Request $request): View
     {
-        $menuItems = MenuItem::query()
-            ->where('is_available', true)
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get();
+        $menuItems = $this->availableMenuItems();
 
         $categories = $menuItems->pluck('category')->filter()->unique()->values();
 
         $heldOrders = Order::with(['table', 'items', 'customer'])
             ->where('is_held', true)
+            ->where('payment_status', 'unpaid')
+            ->whereNotIn('status', ['completed', 'cancelled'])
             ->latest()
-            ->limit(20)
+            ->limit(40)
             ->get();
+
+        $heldCount = Order::query()
+            ->where('is_held', true)
+            ->where('payment_status', 'unpaid')
+            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->count();
 
         $openOrders = $this->openOrdersQuery()
             ->limit(40)
@@ -75,9 +79,10 @@ class PosController extends Controller
                 fn (Order $order) => [$order->table_id => $order->order_number]
             ),
             'recentOrders' => Order::with('table')->latest('placed_at')->limit(10)->get(),
-            'nextOrderNumber' => 'ORD-'.now()->format('ymd').'-'.str_pad((string) (Order::count() + 1), 4, '0', STR_PAD_LEFT),
+            'nextOrderNumber' => $this->nextOrderNumber(),
             'defaultType' => $request->get('type', 'dinein'),
             'notificationCount' => $heldOrders->count() + $openOrders->count(),
+            'heldCount' => $heldCount,
             'taxSettings' => [
                 'tax_name' => $tax->tax_name,
                 'vat_rate' => (float) $tax->vat_rate,
@@ -98,7 +103,17 @@ class PosController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function catalog(): JsonResponse
+    {
+        $items = $this->availableMenuItems()->map(fn (MenuItem $item) => $this->menuItemCard($item))->values();
+
+        return response()->json([
+            'items' => $items,
+            'categories' => $items->pluck('category')->filter()->unique()->values(),
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $request->merge([
             'table_id' => $request->filled('table_id') ? $request->input('table_id') : null,
@@ -182,6 +197,19 @@ class PosController extends Controller
             $isPay = $data['action'] === 'pay';
             $isTableOrder = in_array($data['type'], ['dinein', 'qr', 'walkin'], true);
             $tableId = $isTableOrder && ! empty($data['table_id']) ? (int) $data['table_id'] : null;
+            $payFirst = (bool) (SiteSetting::current()->pay_first ?? false);
+
+            if ($payFirst && ($isHold || $isSave)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'action' => 'This restaurant is pay-first. Collect payment before the kitchen can receive the order.',
+                ]);
+            }
+
+            if (! $payFirst && $isTableOrder && $isPay && empty($data['resume_order_id'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'action' => 'Dine-in cannot be paid directly. Send the order first, then collect payment.',
+                ]);
+            }
 
             $cashPaid = $isPay ? round((float) ($data['cash_paid'] ?? 0), 2) : 0.0;
             $bkashPaid = $isPay ? round((float) ($data['bkash_paid'] ?? 0), 2) : 0.0;
@@ -274,7 +302,7 @@ class PosController extends Controller
                 'card_paid' => $cardPaid,
                 'amount_tendered' => $amountTendered,
                 'change_amount' => $changeAmount,
-                'is_held' => $isHold,
+                'is_held' => ($isHold || $isSave) && ! $isPay,
                 'notes' => $data['notes'] ?? null,
                 'tags' => $data['tags'] ?? [],
             ];
@@ -285,7 +313,7 @@ class PosController extends Controller
                 $order = $existing;
             } else {
                 $order = Order::create(array_merge($orderAttributes, [
-                    'order_number' => 'ORD-'.now()->format('ymd').'-'.str_pad((string) (Order::count() + 1), 4, '0', STR_PAD_LEFT),
+                    'order_number' => $this->nextOrderNumber(),
                     'placed_at' => now(),
                 ]));
             }
@@ -365,11 +393,9 @@ class PosController extends Controller
             }
 
             if ($tableId) {
-                if ($isPay) {
-                    RestaurantTable::whereKey($tableId)->update(['status' => 'available']);
-                } elseif (! $isHold) {
-                    RestaurantTable::whereKey($tableId)->update(['status' => 'ordered']);
-                }
+                RestaurantTable::whereKey($tableId)->update([
+                    'status' => $isPay ? 'available' : 'ordered',
+                ]);
             }
 
             if ($isPay && ! empty($data['customer_id'])) {
@@ -386,8 +412,21 @@ class PosController extends Controller
         $msg = match ($data['action']) {
             'pay' => 'Payment captured · Token '.$this->tokenNumberFromOrder($order->order_number),
             'hold' => 'Order held · '.$order->order_number,
-            default => 'Order sent · Token '.$this->tokenNumberFromOrder($order->order_number).' (customer + kitchen)',
+            default => 'Order sent · Token '.$this->tokenNumberFromOrder($order->order_number).' (unpaid / on hold until Pay)',
         };
+
+        if ($request->expectsJson() || $request->ajax()) {
+            $order->load(['table', 'items', 'customer']);
+
+            return response()->json([
+                'ok' => true,
+                'message' => $msg,
+                'order' => $this->orderPayload($order),
+                'next_order_number' => $this->nextOrderNumber(),
+                'tokens' => $tokensPayload,
+                'invoice' => $invoicePayload,
+            ]);
+        }
 
         $redirect = redirect()->route('admin.pos.index')->with('success', $msg);
         if ($invoicePayload) {
@@ -413,18 +452,60 @@ class PosController extends Controller
         ]);
     }
 
-    private function openOrdersQuery()
+    public function findOrder(Request $request): JsonResponse
+    {
+        $q = trim((string) $request->validate([
+            'q' => ['required', 'string', 'max:80'],
+        ])['q']);
+        $q = ltrim($q, '#');
+
+        $query = $this->unpaidTicketQuery();
+
+        $order = $query->where(function ($inner) use ($q) {
+            $inner->where('order_number', $q)
+                ->orWhere('order_number', 'like', '%'.$q.'%');
+            if (ctype_digit($q)) {
+                $inner->orWhere('id', (int) $q);
+            }
+        })->first();
+
+        return response()->json([
+            'order' => $order ? $this->orderPayload($order) : null,
+        ]);
+    }
+
+    private function nextOrderNumber(): string
+    {
+        $prefix = 'ORD-'.now()->format('ymd').'-';
+        $latest = Order::query()
+            ->where('order_number', 'like', $prefix.'%')
+            ->orderByDesc('id')
+            ->value('order_number');
+
+        $seq = 0;
+        if (is_string($latest) && preg_match('/(\d+)$/', $latest, $m)) {
+            $seq = ((int) $m[1]) + 1;
+        }
+
+        return $prefix.str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function unpaidTicketQuery()
     {
         return Order::with(['table', 'items', 'customer'])
             ->where('payment_status', 'unpaid')
-            ->where('is_held', false)
             ->whereNotIn('status', ['completed', 'cancelled'])
             ->latest('placed_at');
     }
 
+    private function openOrdersQuery()
+    {
+        return $this->unpaidTicketQuery()->where('is_held', false);
+    }
+
     private function findOpenTableOrder(int $tableId, bool $lock = false): ?Order
     {
-        $query = $this->openOrdersQuery()
+        $query = $this->unpaidTicketQuery()
             ->whereNotNull('table_id')
             ->where('table_id', $tableId)
             ->whereIn('type', ['dinein', 'qr', 'walkin']);
@@ -480,6 +561,39 @@ class PosController extends Controller
         }
 
         return $delta;
+    }
+
+    private function availableMenuItems()
+    {
+        return MenuItem::query()
+            ->where('is_available', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function menuItemCard(MenuItem $item): array
+    {
+        $badge = $item->badge ?: ($item->is_bestseller ? 'Popular' : null);
+        $badgeKey = strtolower((string) preg_replace('/\s+/', '', (string) $badge));
+        $fallback = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=500&q=80';
+
+        return [
+            'id' => $item->id,
+            'name' => $item->name,
+            'price' => (float) $item->price,
+            'category' => $item->category,
+            'description' => $item->description,
+            'image_url' => $item->image_url ?: $fallback,
+            'badge' => $badge,
+            'badge_key' => $badgeKey,
+            'is_popular' => $badgeKey === 'popular' || $item->is_bestseller || $item->is_favorite,
+            'is_bestseller' => $item->is_bestseller || $badgeKey === 'bestseller',
+            'is_new' => $badgeKey === 'new',
+            'is_spicy' => $badgeKey === 'spicy',
+            'is_vegetarian' => (bool) $item->is_vegetarian,
+            'is_favorite' => (bool) $item->is_favorite,
+        ];
     }
 
     private function orderPayload(Order $order): array

@@ -16,7 +16,7 @@
     {{-- Critical layout: works even if external CSS fails --}}
     <style>
         html,body{width:100%;height:100%;margin:0;overflow:hidden}
-        .pos-shell{position:fixed;inset:0;width:100%;height:100%;height:100dvh;display:grid;grid-template-rows:64px minmax(0,1fr) auto;overflow:hidden;direction:ltr;background:#eef1f6}
+        .pos-shell{position:fixed;inset:0;width:100%;height:100%;height:100dvh;display:grid;grid-template-rows:64px minmax(0,1fr);overflow:hidden;direction:ltr;background:#eef1f6}
         .pos-body{display:grid!important;grid-template-columns:minmax(0,1fr) 420px!important;grid-template-areas:'catalog checkout'!important;gap:14px;padding:14px;min-height:0;overflow:hidden;direction:ltr}
         .catalog-panel{grid-area:catalog!important;min-height:0;display:flex;flex-direction:column;overflow:hidden}
         .checkout-panel{grid-area:checkout!important;min-height:0;display:flex;flex-direction:column;overflow:hidden}

@@ -41,6 +41,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Operations
         Route::get('pos', [PosController::class, 'index'])->name('pos.index');
         Route::get('pos/table-order', [PosController::class, 'tableOrder'])->name('pos.table-order');
+        Route::get('pos/find-order', [PosController::class, 'findOrder'])->name('pos.find-order');
+        Route::get('pos/catalog', [PosController::class, 'catalog'])->name('pos.catalog');
         Route::post('pos', [PosController::class, 'store'])->name('pos.store');
         Route::resource('menu-items', MenuItemController::class)->except(['show']);
         Route::resource('orders', OrderController::class)->only(['index', 'edit', 'update', 'destroy']);
@@ -73,6 +75,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('roles', RoleController::class)->except(['show']);
         Route::get('settings', [SettingController::class, 'edit'])->name('settings.edit');
         Route::put('settings', [SettingController::class, 'update'])->name('settings.update');
+        Route::post('settings/pay-first', [SettingController::class, 'updatePayFirst'])->name('settings.pay-first');
     });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

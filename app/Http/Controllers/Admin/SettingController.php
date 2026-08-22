@@ -122,4 +122,22 @@ class SettingController extends Controller
 
         return redirect()->route('admin.settings.edit')->with('success', 'Site settings saved. Public website will use these details.');
     }
+
+    public function updatePayFirst(Request $request)
+    {
+        $payFirst = $request->boolean('pay_first');
+        SiteSetting::current()->update(['pay_first' => $payFirst]);
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'ok' => true,
+                'pay_first' => $payFirst,
+                'message' => $payFirst
+                    ? 'Pay-first is on. Kitchen receives orders only after payment.'
+                    : 'Pay-first is off. Dine-in can Send first, then Pay.',
+            ]);
+        }
+
+        return redirect()->route('admin.settings.edit')->with('success', $payFirst ? 'Pay-first restaurant enabled.' : 'Pay-first restaurant disabled.');
+    }
 }

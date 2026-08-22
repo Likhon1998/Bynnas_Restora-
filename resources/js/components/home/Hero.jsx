@@ -74,11 +74,7 @@ export default function Hero() {
             <div className="relative site-container pt-[5.75rem] pb-28 sm:pt-28 sm:pb-32 lg:pt-[6.5rem] lg:pb-36">
                 <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 xl:gap-12">
                     <div className="max-w-[580px]">
-                        <p className="anim-up font-script text-[2.1rem] leading-none text-gold-soft sm:text-[2.45rem]">
-                            {settings.restaurant_name}
-                        </p>
-
-                        <div className="anim-up-1 mt-3 mb-4 flex items-center gap-2.5">
+                        <div className="anim-up mb-4 flex items-center gap-2.5">
                             <span className="h-px w-7 bg-gold/70" />
                             <p className="text-[11px] font-semibold tracking-[0.2em] text-gold uppercase sm:text-[12px]">
                                 {settings.hero_eyebrow}

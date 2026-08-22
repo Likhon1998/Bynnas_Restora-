@@ -9,6 +9,8 @@
     var serviceRatePct = defaultServiceRate;
     var vatRatePct = defaultVatRate;
     var cart = [];
+    var lastKitchenMap = {};
+    var sendingOrder = false;
     var discount = 0;
     var discountPct = null;
     var noteEditIndex = null;
@@ -56,6 +58,31 @@
         toastTimer = setTimeout(function () { el.classList.add('hidden'); }, 1800);
     }
 
+    function setElText(id, value) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = value;
+    }
+
+    function currentTableLabel() {
+        if (lastTableCode && lastTableCode !== '—' && lastTableCode !== '-') {
+            return 'Table ' + lastTableCode;
+        }
+        var top = document.getElementById('topTableSelect');
+        if (top && top.value) {
+            var opt = top.options[top.selectedIndex];
+            var code = opt ? (opt.dataset.code || '') : '';
+            return code ? ('Table ' + code) : 'No seat';
+        }
+        return 'No seat';
+    }
+
+    function currentCustomerLabel() {
+        var nameEl = document.getElementById('customerName');
+        var guestEl = document.getElementById('guestNameField');
+        var name = ((nameEl && nameEl.value) || (guestEl && guestEl.value) || '').trim();
+        return name || 'Walk-in';
+    }
+
     function syncChargeUi() {
         if (serviceRateField) {
             serviceRateField.disabled = !applyService;
@@ -84,24 +111,37 @@
         return cart.reduce(function (s, i) { return s + i.qty; }, 0);
     }
 
-    function cartLineHtml(item, idx) {
+    var notePresets = ['No Butter', 'Extra Cheese', 'No Onion', 'Extra Spicy'];
+
+    function cartLineHtml(item, idx, withNoteField) {
         var mods = item.note ? '<div class="mods">• ' + escapeHtml(item.note) + '</div>' : '';
+        var extra = '';
+        if (withNoteField) {
+            extra = '<input type="text" class="field cart-line-note" data-idx="' + idx + '" value="' + escapeHtml(item.note || '') + '" placeholder="Add note, e.g. no onion">'
+                + '<div class="cart-note-chips">'
+                + notePresets.map(function (mod) {
+                    return '<button type="button" class="note-chip' + (item.note === mod ? ' active' : '') + '" data-idx="' + idx + '" data-mod="' + escapeHtml(mod) + '">' + escapeHtml(mod) + '</button>';
+                }).join('')
+                + '</div>';
+        }
         return '<li class="cart-line">'
             + '<div class="qty">' + item.qty + '×</div>'
             + '<div class="details">'
             + '<strong>' + escapeHtml(item.name) + '</strong>'
-            + mods
+            + (withNoteField ? '' : mods)
             + '<div class="qty-controls">'
             + '<button type="button" class="dec" data-idx="' + idx + '" aria-label="Decrease">−</button>'
             + '<span>' + item.qty + '</span>'
             + '<button type="button" class="inc" data-idx="' + idx + '" aria-label="Increase">+</button>'
-            + '<button type="button" class="note-btn" data-idx="' + idx + '">Note</button>'
+            + (withNoteField ? '' : '<button type="button" class="note-btn" data-idx="' + idx + '">Note</button>')
             + '</div></div>'
             + '<div class="right">'
             + '<span class="unit">' + money(item.price) + '</span>'
             + '<span class="line-total">' + money(item.price * item.qty) + '</span>'
             + '<button type="button" class="rm" data-idx="' + idx + '" aria-label="Remove">×</button>'
-            + '</div></li>';
+            + '</div>'
+            + extra
+            + '</li>';
     }
 
     function renderCartModal() {
@@ -113,22 +153,19 @@
         if (!cart.length) {
             list.innerHTML = '<li class="cart-modal-empty">No items in this order yet.</li>';
         } else {
-            list.innerHTML = cart.map(function (item, idx) { return cartLineHtml(item, idx); }).join('');
+            list.innerHTML = cart.map(function (item, idx) { return cartLineHtml(item, idx, true); }).join('');
         }
         if (countEl) {
             var count = itemCount();
-            countEl.textContent = count === 1 ? '1 item' : count + ' items';
+            countEl.textContent = (count === 1 ? '1 item' : count + ' items') + ' · add a note on any item';
         }
         if (subtotalEl) subtotalEl.textContent = money(totals().subtotal);
     }
 
     function openCartModal() {
-        if (!cart.length) {
-            toast('Add items to view the cart');
-            return;
-        }
         renderCartModal();
-        document.getElementById('cartModal').classList.remove('hidden');
+        var modal = document.getElementById('cartModal');
+        if (modal) modal.classList.remove('hidden');
     }
 
     function closeCartModal() {
@@ -162,6 +199,12 @@
             render();
             return;
         }
+        if (btn.classList.contains('note-chip')) {
+            var current = (cart[idx].note || '');
+            cart[idx].note = current === btn.dataset.mod ? '' : (btn.dataset.mod || '');
+            render();
+            return;
+        }
         if (btn.classList.contains('note-btn')) {
             openNoteModal(idx);
         }
@@ -170,40 +213,44 @@
     function render() {
         var t = totals();
         syncChargeUi();
+        if (!cartList) return;
         if (!cart.length) {
             cartList.innerHTML = '<li class="cart-empty">No items yet. Tap + on a menu item to add.</li>';
         } else {
             cartList.innerHTML = cart.map(function (item, idx) { return cartLineHtml(item, idx); }).join('');
         }
 
-        document.getElementById('subtotalLabel').textContent = money(t.subtotal);
-        document.getElementById('serviceLabel').textContent = money(t.service);
-        document.getElementById('taxLabel').textContent = money(t.tax);
-        document.getElementById('totalLabel').textContent = money(t.total);
-        document.getElementById('payAmount').textContent = money(t.total);
-        document.getElementById('statItems').textContent = String(itemCount());
-        document.getElementById('statTotal').textContent = money(t.total);
+        setElText('subtotalLabel', money(t.subtotal));
+        setElText('serviceLabel', money(t.service));
+        setElText('taxLabel', money(t.tax));
+        setElText('totalLabel', money(t.total));
+        setElText('payAmount', money(t.total));
         var cartCountLabel = document.getElementById('cartCountLabel');
         if (cartCountLabel) {
             var count = itemCount();
             cartCountLabel.textContent = count === 1 ? '1 item' : count + ' items';
         }
         var expandBtn = document.getElementById('expandCartBtn');
-        if (expandBtn) expandBtn.disabled = !cart.length;
+        if (expandBtn) expandBtn.disabled = false;
         renderCartModal();
 
         var discountRow = document.getElementById('discountRow');
         var discountLabel = document.getElementById('discountLabel');
-        if (discount > 0) {
-            discountRow.classList.remove('hidden');
-            discountLabel.textContent = '−' + money(discount);
-        } else {
-            discountRow.classList.add('hidden');
+        if (discountRow) {
+            if (discount > 0) {
+                discountRow.classList.remove('hidden');
+                if (discountLabel) discountLabel.textContent = '−' + money(discount);
+            } else {
+                discountRow.classList.add('hidden');
+            }
         }
 
-        document.getElementById('serviceChargeInput').value = t.service;
-        document.getElementById('taxInput').value = t.tax;
-        document.getElementById('discountInput').value = discount;
+        var serviceChargeInput = document.getElementById('serviceChargeInput');
+        var taxInput = document.getElementById('taxInput');
+        var discountInput = document.getElementById('discountInput');
+        if (serviceChargeInput) serviceChargeInput.value = t.service;
+        if (taxInput) taxInput.value = t.tax;
+        if (discountInput) discountInput.value = discount;
         var applyServiceInput = document.getElementById('applyServiceInput');
         var applyTaxInput = document.getElementById('applyTaxInput');
         var serviceRateInput = document.getElementById('serviceRateInput');
@@ -213,12 +260,15 @@
         if (serviceRateInput) serviceRateInput.value = serviceRatePct;
         if (taxRateInput) taxRateInput.value = vatRatePct;
 
-        hidden.innerHTML = cart.map(function (item, i) {
-            var note = item.note ? '<input type="hidden" name="items[' + i + '][note]" value="' + escapeHtml(item.note) + '">' : '';
-            return '<input type="hidden" name="items[' + i + '][menu_item_id]" value="' + item.id + '">'
-                + '<input type="hidden" name="items[' + i + '][quantity]" value="' + item.qty + '">'
-                + note;
-        }).join('');
+        if (hidden) {
+            hidden.innerHTML = cart.map(function (item, i) {
+                var note = item.note ? '<input type="hidden" name="items[' + i + '][note]" value="' + escapeHtml(item.note) + '">' : '';
+                return '<input type="hidden" name="items[' + i + '][menu_item_id]" value="' + item.id + '">'
+                    + '<input type="hidden" name="items[' + i + '][quantity]" value="' + item.qty + '">'
+                    + note;
+            }).join('');
+        }
+        syncCheckoutMode();
     }
 
     function addItem(id, name, price, note) {
@@ -274,11 +324,14 @@
         });
     }
 
-    document.getElementById('menuGrid').addEventListener('click', function (e) {
-        var card = e.target.closest('.product-card');
-        if (!card) return;
-        addItem(card.dataset.id, card.dataset.name, card.dataset.price, '');
-    });
+    var menuGrid = document.getElementById('menuGrid');
+    if (menuGrid) {
+        menuGrid.addEventListener('click', function (e) {
+            var card = e.target.closest('.product-card');
+            if (!card) return;
+            addItem(card.dataset.id, card.dataset.name, card.dataset.price, '');
+        });
+    }
 
     document.getElementById('modifierChips').addEventListener('click', function (e) {
         var btn = e.target.closest('button');
@@ -301,11 +354,39 @@
         render();
     });
 
-    cartList.addEventListener('click', handleCartLineClick);
+    if (cartList) cartList.addEventListener('click', handleCartLineClick);
     var cartModalList = document.getElementById('cartModalList');
-    if (cartModalList) cartModalList.addEventListener('click', handleCartLineClick);
+    if (cartModalList) {
+        cartModalList.addEventListener('click', handleCartLineClick);
+        cartModalList.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter' || !e.target.classList.contains('cart-line-note')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.target.blur();
+        });
+        cartModalList.addEventListener('input', function (e) {
+            var field = e.target.closest('.cart-line-note');
+            if (!field) return;
+            var idx = Number(field.dataset.idx);
+            if (Number.isNaN(idx) || !cart[idx]) return;
+            cart[idx].note = field.value;
+        });
+        cartModalList.addEventListener('blur', function (e) {
+            var field = e.target.closest && e.target.closest('.cart-line-note');
+            if (!field) return;
+            var idx = Number(field.dataset.idx);
+            if (Number.isNaN(idx) || !cart[idx]) return;
+            cart[idx].note = (field.value || '').trim();
+            render();
+        }, true);
+    }
 
-    document.getElementById('expandCartBtn').addEventListener('click', openCartModal);
+    var expandBtnEl = document.getElementById('expandCartBtn');
+    if (expandBtnEl) expandBtnEl.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCartModal();
+    });
     document.getElementById('closeCartModal').addEventListener('click', closeCartModal);
     document.getElementById('closeCartModalBtn').addEventListener('click', closeCartModal);
     document.getElementById('cartModal').addEventListener('click', function (e) {
@@ -359,6 +440,63 @@
         visible.forEach(function (c) { grid.appendChild(c); });
     }
 
+    function escapeAttr(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
+
+    function productCardHtml(item) {
+        var fallback = 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=500&q=80';
+        var badge = item.badge
+            ? '<span class="badge ' + escapeAttr(item.badge_key) + '">' + escapeHtml(item.badge) + '</span>'
+            : '';
+        var desc = item.description
+            ? '<p class="ingredients">' + escapeHtml(item.description) + '</p>'
+            : '<p class="ingredients muted">No ingredients listed</p>';
+        return '<article class="product-card"'
+            + ' data-id="' + escapeAttr(item.id) + '"'
+            + ' data-name="' + escapeAttr(item.name) + '"'
+            + ' data-price="' + escapeAttr(item.price) + '"'
+            + ' data-category="' + escapeAttr(item.category || '') + '"'
+            + ' data-popular="' + (item.is_popular ? '1' : '0') + '"'
+            + ' data-bestseller="' + (item.is_bestseller ? '1' : '0') + '"'
+            + ' data-new="' + (item.is_new ? '1' : '0') + '"'
+            + ' data-spicy="' + (item.is_spicy ? '1' : '0') + '"'
+            + ' data-vegetarian="' + (item.is_vegetarian ? '1' : '0') + '"'
+            + ' data-favorite="' + (item.is_favorite ? '1' : '0') + '">'
+            + '<div class="thumb"><img src="' + escapeAttr(item.image_url || fallback) + '" alt="' + escapeAttr(item.name) + '" loading="lazy" onerror="this.src=\'' + fallback + '\'">'
+            + badge
+            + '<span class="star ' + (item.is_favorite ? 'on' : '') + '" aria-hidden="true"></span></div>'
+            + '<div class="info"><p class="name">' + escapeHtml(item.name) + '</p>' + desc
+            + '<div class="foot"><span class="price">৳ ' + Number(item.price).toFixed(2) + '</span><span class="add-btn" aria-hidden="true">+</span></div></div></article>';
+    }
+
+    function refreshCatalog() {
+        if (!config.catalogUrl) return;
+        fetch(config.catalogUrl, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                var grid = document.getElementById('menuGrid');
+                if (!grid || !data.items) return;
+                if (!data.items.length) {
+                    grid.innerHTML = '<div class="cart-empty" style="grid-column:1/-1">No available menu items.</div>';
+                    return;
+                }
+                grid.innerHTML = data.items.map(productCardHtml).join('');
+                applyFilters();
+            })
+            .catch(function () { /* keep current grid */ });
+    }
+
+    var refreshMenuBtn = document.getElementById('refreshMenuBtn');
+    if (refreshMenuBtn) {
+        refreshMenuBtn.addEventListener('click', function () {
+            refreshCatalog();
+            toast('Menu refreshed');
+        });
+    }
     document.getElementById('catTabs').addEventListener('click', function (e) {
         var btn = e.target.closest('.cat-tab');
         if (!btn || btn.id === 'moreCatsBtn') return;
@@ -403,11 +541,51 @@
     }
 
     var lastTableId = document.getElementById('tableIdInput').value || '';
-    var lastTableCode = (document.getElementById('statTable').textContent || '').replace(/^Table\s+/i, '').trim();
+    var lastTableCode = '';
 
     function resetToNewOrder() {
         document.getElementById('resumeOrderId').value = '';
         document.getElementById('orderNumberLabel').textContent = '#' + (config.nextOrderNumber || '');
+        lastKitchenMap = {};
+    }
+
+    function bumpNextOrderNumber(usedNumber) {
+        var source = String(usedNumber || config.nextOrderNumber || '').replace(/^#/, '').trim();
+        var m = source.match(/^(ORD-\d+-)?(\d+)$/i);
+        if (m) {
+            var prefix = m[1] || '';
+            config.nextOrderNumber = prefix + String(parseInt(m[2], 10) + 1).padStart(m[2].length, '0');
+            return;
+        }
+        var tail = source.match(/^(.*?)(\d+)$/);
+        if (!tail) return;
+        config.nextOrderNumber = tail[1] + String(parseInt(tail[2], 10) + 1).padStart(tail[2].length, '0');
+    }
+
+    function applyNextOrderNumber(serverNext, usedNumber) {
+        if (serverNext) {
+            config.nextOrderNumber = String(serverNext).replace(/^#/, '').trim();
+        } else {
+            bumpNextOrderNumber(usedNumber);
+        }
+    }
+
+    function startFreshTicket() {
+        cart = [];
+        discount = 0;
+        discountPct = null;
+        applyService = config.applyServiceDefault === true;
+        applyTax = config.applyTaxDefault === true;
+        serviceRatePct = defaultServiceRate;
+        vatRatePct = defaultVatRate;
+        if (applyServiceToggle) applyServiceToggle.checked = applyService;
+        if (applyTaxToggle) applyTaxToggle.checked = applyTax;
+        document.getElementById('resumeOrderId').value = '';
+        resetToNewOrder();
+        document.querySelectorAll('#discountPresets button').forEach(function (b) { b.classList.remove('active'); });
+        syncCustomer('', '', '');
+        syncTable('', '', { skipLookup: true });
+        render();
     }
 
     function loadOrderPayload(order, message) {
@@ -427,6 +605,7 @@
         applyTax = order.apply_tax === true || Number(order.tax_amount || 0) > 0;
         if (applyServiceToggle) applyServiceToggle.checked = applyService;
         if (applyTaxToggle) applyTaxToggle.checked = applyTax;
+        lastKitchenMap = kitchenMapFromCart(cart);
         document.getElementById('resumeOrderId').value = order.id;
         document.getElementById('orderNumberLabel').textContent = '#' + order.order_number;
         document.getElementById('promoCode').value = order.promo_code || '';
@@ -477,6 +656,47 @@
             });
     }
 
+    function isPayFirst() {
+        return config.payFirst === true;
+    }
+
+    function isDineInType(type) {
+        type = type || (document.getElementById('orderType') && document.getElementById('orderType').value) || 'dinein';
+        return type === 'dinein' || type === 'qr' || type === 'walkin';
+    }
+
+    function hasOpenTicket() {
+        var resume = document.getElementById('resumeOrderId');
+        return !!(resume && resume.value);
+    }
+
+    function canDirectPay() {
+        if (isPayFirst()) return true;
+        return !isDineInType();
+    }
+
+    function canPayNow() {
+        if (isPayFirst()) return true;
+        if (!isDineInType()) return true;
+        return hasOpenTicket();
+    }
+
+    function syncCheckoutMode() {
+        var payBtn = document.getElementById('payBtn');
+        var holdBtn = document.getElementById('holdBtn');
+        var saveBtn = document.getElementById('saveBtn');
+        var payAllowed = canPayNow();
+        if (payBtn) {
+            payBtn.classList.toggle('is-locked', !payAllowed);
+            payBtn.title = payAllowed
+                ? (canDirectPay() ? 'Collect payment now' : 'Collect payment for this sent order')
+                : 'Dine-in: send the order first, then pay';
+        }
+        var sendAllowed = !isPayFirst();
+        if (holdBtn) holdBtn.classList.toggle('hidden', !sendAllowed);
+        if (saveBtn) saveBtn.classList.toggle('hidden', !sendAllowed);
+    }
+
     function setType(type) {
         document.getElementById('orderType').value = type;
         document.querySelectorAll('#serviceType button').forEach(function (b) {
@@ -510,10 +730,9 @@
             var currentTable = document.getElementById('tableIdInput').value;
             if (currentTable) {
                 lastTableId = currentTable;
-                lastTableCode = (document.getElementById('statTable').textContent || '').replace(/^Table\s+/i, '').trim();
+                lastTableCode = lastTableCode || '';
             }
             document.getElementById('tableIdInput').value = '';
-            document.getElementById('statTable').textContent = '—';
         }
 
         var printBtn = document.getElementById('printBtn');
@@ -523,6 +742,7 @@
             printBtn.disabled = !allowDueBill;
             if (!allowDueBill) closeDueBillPreview();
         }
+        syncCheckoutMode();
     }
 
     document.getElementById('serviceType').addEventListener('click', function (e) {
@@ -536,7 +756,6 @@
         id = id || '';
         code = code || '';
         document.getElementById('tableIdInput').value = id;
-        document.getElementById('statTable').textContent = id ? ('Table ' + code) : 'No seat';
         var top = document.getElementById('topTableSelect');
         if (top) top.value = id;
         var modalSel = document.getElementById('modalTableSelect');
@@ -573,7 +792,6 @@
         document.getElementById('customerName').value = name || '';
         var phoneInput = document.getElementById('customerPhone');
         if (phoneInput) phoneInput.value = phone || '';
-        document.getElementById('statCustomer').textContent = name || 'Walk-in';
         var guestName = document.getElementById('guestNameField');
         var guestPhone = document.getElementById('guestPhoneField');
         if (guestName) guestName.value = name || '';
@@ -591,7 +809,6 @@
         var phone = guestPhone ? (guestPhone.value || '').trim() : '';
         document.getElementById('customerName').value = name;
         document.getElementById('customerPhone').value = phone;
-        document.getElementById('statCustomer').textContent = name || 'Walk-in';
         var modalName = document.getElementById('modalCustomerName');
         var modalPhone = document.getElementById('modalCustomerPhone');
         if (modalName) modalName.value = name;
@@ -611,10 +828,13 @@
         guestPhoneField.addEventListener('input', pullGuestFields);
     }
 
-    document.getElementById('customerPickerBtn').addEventListener('click', function () {
-        document.getElementById('modalCustomerSelect').value = document.getElementById('customerSelect').value;
-        document.getElementById('customerModal').classList.remove('hidden');
-    });
+    var customerPickerBtn = document.getElementById('customerPickerBtn');
+    if (customerPickerBtn) {
+        customerPickerBtn.addEventListener('click', function () {
+            document.getElementById('modalCustomerSelect').value = document.getElementById('customerSelect').value;
+            document.getElementById('customerModal').classList.remove('hidden');
+        });
+    }
     document.getElementById('cancelCustomerModal').addEventListener('click', function () {
         document.getElementById('customerModal').classList.add('hidden');
     });
@@ -631,6 +851,55 @@
         e.stopPropagation();
         document.getElementById('notifPanel').classList.toggle('hidden');
     });
+    var holdCountChip = document.getElementById('holdCountChip');
+    if (holdCountChip) {
+        holdCountChip.addEventListener('click', function (e) {
+            e.stopPropagation();
+            document.getElementById('notifPanel').classList.toggle('hidden');
+        });
+    }
+
+    var payFirstToggle = document.getElementById('payFirstToggle');
+    function syncPayFirstChip() {
+        if (!payFirstToggle) return;
+        var on = isPayFirst();
+        payFirstToggle.classList.toggle('is-on', on);
+        payFirstToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+        var state = document.getElementById('payFirstState');
+        if (state) state.textContent = on ? 'ON' : 'OFF';
+        syncCheckoutMode();
+    }
+    if (payFirstToggle) {
+        payFirstToggle.addEventListener('click', function () {
+            var next = !isPayFirst();
+            var url = config.payFirstUrl;
+            if (!url) {
+                config.payFirst = next;
+                syncPayFirstChip();
+                toast(next ? 'Pay-first on' : 'Pay-first off');
+                return;
+            }
+            var body = new FormData();
+            body.set('pay_first', next ? '1' : '0');
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+                body: body,
+                credentials: 'same-origin',
+            }).then(function (res) { return res.json(); }).then(function (data) {
+                config.payFirst = !!(data.pay_first);
+                syncPayFirstChip();
+                toast(data.message || (config.payFirst ? 'Pay-first on' : 'Pay-first off'));
+            }).catch(function () {
+                toast('Could not save pay-first setting');
+            });
+        });
+        syncPayFirstChip();
+    }
     document.addEventListener('click', function () {
         document.getElementById('notifPanel').classList.add('hidden');
     });
@@ -639,26 +908,149 @@
     });
 
     var openOrders = config.openOrders || [];
-    document.querySelectorAll('.resume-held').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var order = heldOrders.find(function (o) { return String(o.id) === String(btn.dataset.id); });
-            if (!order) return;
-            loadOrderPayload(order, 'Held order loaded');
-            document.getElementById('notifPanel').classList.add('hidden');
-        });
-    });
-    document.querySelectorAll('.resume-open').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var order = openOrders.find(function (o) { return String(o.id) === String(btn.dataset.id); });
-            if (!order) return;
-            if (cart.length) {
-                var ok = confirm('Load Token ' + (order.token_number || order.order_number) + ' and replace current cart?');
-                if (!ok) return;
+    var notifPanel = document.getElementById('notifPanel');
+    if (notifPanel) {
+        notifPanel.addEventListener('click', function (e) {
+            var heldBtn = e.target.closest('.resume-held');
+            if (heldBtn) {
+                var held = heldOrders.find(function (o) { return String(o.id) === String(heldBtn.dataset.id); });
+                if (!held) return;
+                loadOrderPayload(held, 'Previous order loaded · add items then Send');
+                notifPanel.classList.add('hidden');
+                return;
             }
-            loadOrderPayload(order, 'Open order loaded · Token ' + (order.token_number || ''));
-            document.getElementById('notifPanel').classList.add('hidden');
+            var openBtn = e.target.closest('.resume-open');
+            if (openBtn) {
+                var order = openOrders.find(function (o) { return String(o.id) === String(openBtn.dataset.id); });
+                if (!order) return;
+                if (cart.length) {
+                    var ok = confirm('Load Token ' + (order.token_number || order.order_number) + ' and replace current cart?');
+                    if (!ok) return;
+                }
+                loadOrderPayload(order, 'Open order loaded · Token ' + (order.token_number || ''));
+                notifPanel.classList.add('hidden');
+            }
         });
-    });
+    }
+
+    function syncHeldBadge() {
+        var n = heldOrders.length;
+        var badge = document.getElementById('heldCountBadge');
+        var label = document.getElementById('heldCountLabel');
+        if (badge) {
+            badge.textContent = String(n);
+            badge.classList.toggle('hidden', n < 1);
+        }
+        var heldText = document.getElementById('heldCountText');
+        if (heldText) heldText.textContent = String(n);
+        if (label) label.textContent = String(n);
+    }
+
+    function normalizeOrderQuery(q) {
+        return String(q || '').replace(/^#/, '').trim().toLowerCase();
+    }
+
+    function orderMatchesQuery(order, q) {
+        if (!order || !q) return false;
+        if (String(order.id) === q) return true;
+        var num = String(order.order_number || '').toLowerCase();
+        if (num === q || num.indexOf(q) !== -1) return true;
+        if (String(order.token_number || '').toLowerCase() === q) return true;
+        return false;
+    }
+
+    function findLocalOrder(q) {
+        q = normalizeOrderQuery(q);
+        var fromHeld = heldOrders.find(function (o) { return orderMatchesQuery(o, q); });
+        if (fromHeld) return fromHeld;
+        return (openOrders || []).find(function (o) { return orderMatchesQuery(o, q); }) || null;
+    }
+
+    function recallOrder(raw) {
+        var q = String(raw || '').trim();
+        if (!q) {
+            toast('Enter an order number or ID');
+            return;
+        }
+        var local = findLocalOrder(q);
+        if (local) {
+            loadOrderPayload(local, 'Loaded ' + (local.order_number || ('#' + local.id)));
+            document.getElementById('notifPanel').classList.add('hidden');
+            return;
+        }
+        if (!config.findOrderUrl) {
+            toast('Order not found');
+            return;
+        }
+        fetch(config.findOrderUrl + '?q=' + encodeURIComponent(normalizeOrderQuery(q)), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.order) {
+                    toast('No unpaid order matches ' + q);
+                    return;
+                }
+                upsertHeldOrder(data.order);
+                loadOrderPayload(data.order, 'Loaded ' + data.order.order_number);
+                document.getElementById('notifPanel').classList.add('hidden');
+            })
+            .catch(function () { toast('Could not find order'); });
+    }
+
+    var recallBtn = document.getElementById('recallOrderBtn');
+    var recallInput = document.getElementById('recallOrderInput');
+    if (recallBtn && recallInput) {
+        recallBtn.addEventListener('click', function () { recallOrder(recallInput.value); });
+        recallInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                recallOrder(recallInput.value);
+            }
+        });
+    }
+    var heldFindInput = document.getElementById('heldFindInput');
+    if (heldFindInput) {
+        heldFindInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                recallOrder(heldFindInput.value);
+            }
+        });
+    }
+
+    function renderHeldList() {
+        var wrap = document.getElementById('heldOrdersWrap');
+        if (wrap) {
+            if (!heldOrders.length) {
+                wrap.innerHTML = '<p class="notif-empty">No held orders right now.</p>';
+            } else {
+                wrap.innerHTML = '<ul id="heldOrdersList">' + heldOrders.map(function (o) {
+                    var count = (o.items || []).reduce(function (s, i) { return s + Number(i.qty || 1); }, 0);
+                    return '<li><button type="button" class="resume-held" data-id="' + o.id + '">'
+                        + '<strong>' + escapeHtml(o.order_number || '') + '</strong>'
+                        + '<small>' + escapeHtml(String(o.type || '')) + ' · ' + count + ' items · ' + money(o.total) + '</small>'
+                        + '</button></li>';
+                }).join('') + '</ul>';
+            }
+        }
+        syncHeldBadge();
+    }
+
+    function upsertHeldOrder(order) {
+        if (!order || !order.id) return;
+        heldOrders = [order].concat(heldOrders.filter(function (o) {
+            return String(o.id) !== String(order.id);
+        }));
+        renderHeldList();
+    }
+
+    function dropHeldOrder(id) {
+        if (!id) return;
+        heldOrders = heldOrders.filter(function (o) { return String(o.id) !== String(id); });
+        renderHeldList();
+    }
 
     function round2(n) {
         return Math.round((Number(n) || 0) * 100) / 100;
@@ -748,6 +1140,9 @@
         } else {
             document.getElementById('payTendered').value = '';
         }
+        document.querySelectorAll('.pay-quick button').forEach(function (b) {
+            b.classList.toggle('active', b.dataset.fill === method);
+        });
         syncPaySummary();
     }
 
@@ -805,6 +1200,10 @@
 
     document.getElementById('payBtn').addEventListener('click', function () {
         if (!cart.length) { toast('Add at least one menu item'); return; }
+        if (!canPayNow()) {
+            toast('Dine-in cannot be paid directly. Send first, then Pay.');
+            return;
+        }
         pullGuestFields();
         var nameEl = document.getElementById('modalCustomerName');
         var phoneEl = document.getElementById('modalCustomerPhone');
@@ -820,6 +1219,12 @@
     document.getElementById('cancelPayModal').addEventListener('click', function () {
         document.getElementById('payModal').classList.add('hidden');
     });
+    var cancelPayModalBtn = document.getElementById('cancelPayModalBtn');
+    if (cancelPayModalBtn) {
+        cancelPayModalBtn.addEventListener('click', function () {
+            document.getElementById('payModal').classList.add('hidden');
+        });
+    }
     document.getElementById('confirmPayBtn').addEventListener('click', function () {
         var summary = syncPaySummary();
         var err = document.getElementById('payError');
@@ -845,20 +1250,197 @@
         document.getElementById('orderNotes').value = document.getElementById('modalNotes').value;
         document.getElementById('posAction').value = 'pay';
         document.getElementById('payModal').classList.add('hidden');
-        document.getElementById('posForm').requestSubmit();
+        submitTicketAjax('pay');
     });
 
     document.getElementById('posForm').addEventListener('submit', function (e) {
+        e.preventDefault();
         pullGuestFields();
         if (!cart.length) {
-            e.preventDefault();
             toast('Add at least one menu item');
             return;
         }
         if (e.submitter && e.submitter.dataset.action) {
             document.getElementById('posAction').value = e.submitter.dataset.action;
         }
+        var action = document.getElementById('posAction').value || 'save';
+        if ((action === 'save' || action === 'hold') && isPayFirst()) {
+            toast('Pay-first restaurant: collect payment before sending.');
+            return;
+        }
+        submitTicketAjax(action);
     });
+
+    function kitchenLineKey(item) {
+        return String(item.id) + '::' + (item.note || '');
+    }
+
+    function kitchenMapFromCart(list) {
+        var map = {};
+        (list || []).forEach(function (item) {
+            var key = kitchenLineKey(item);
+            map[key] = (map[key] || 0) + Number(item.qty);
+        });
+        return map;
+    }
+
+    function tokensFromCart(isAddition) {
+        var orderNo = (document.getElementById('orderNumberLabel').textContent || '').replace(/^#\s*/, '').trim();
+        var tokenMatch = orderNo.match(/(\d+)$/);
+        var type = document.getElementById('orderType').value || 'dinein';
+        var tableText = currentTableLabel();
+        var tableCode = tableText.replace(/^Table\s+/i, '').trim();
+        if (tableCode === '—' || tableCode === '-' || tableCode === 'No seat') tableCode = '';
+        var customerItems = cart.map(function (item) {
+            return { name: item.name + (item.note ? ' (' + item.note + ')' : ''), qty: item.qty };
+        });
+        var kitchenItems = [];
+        var hadPrevious = Object.keys(lastKitchenMap).length > 0;
+        cart.forEach(function (item) {
+            var key = kitchenLineKey(item);
+            var prev = lastKitchenMap[key] || 0;
+            var add = item.qty - prev;
+            if (add > 0) {
+                kitchenItems.push({
+                    name: item.name + (item.note ? ' (' + item.note + ')' : ''),
+                    qty: add,
+                });
+            }
+        });
+        if (!hadPrevious) kitchenItems = customerItems.slice();
+        var t = totals();
+        return {
+            order_number: orderNo,
+            token_number: tokenMatch ? tokenMatch[1] : orderNo,
+            is_addition: !!(isAddition && hadPrevious),
+            type_label: typeLabel(type),
+            table: tableCode || null,
+            seat_label: tableCode ? ('Table ' + tableCode) : 'No seat yet',
+            customer_name: currentCustomerLabel(),
+            cashier: config.cashierName || 'Cashier',
+            placed_at: new Date().toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
+            notes: (document.getElementById('orderNotes').value || '').trim(),
+            customer_items: customerItems,
+            kitchen_items: kitchenItems,
+            item_count: itemCount(),
+            subtotal: t.subtotal,
+            total: t.total,
+        };
+    }
+
+    function csrfToken() {
+        var input = document.querySelector('#posForm input[name="_token"]');
+        return input ? input.value : '';
+    }
+
+    function numField(id) {
+        var el = document.getElementById(id);
+        return el ? Number(el.value || 0) : 0;
+    }
+
+    function invoiceFromCart() {
+        var t = totals();
+        var orderNo = (document.getElementById('orderNumberLabel').textContent || '').replace(/^#\s*/, '').trim();
+        var type = document.getElementById('orderType').value || 'dinein';
+        var tableText = currentTableLabel();
+        var tableCode = tableText.replace(/^Table\s+/i, '').trim();
+        if (tableCode === '—' || tableCode === '-' || tableCode === 'No seat') tableCode = '';
+        var now = new Date().toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        return {
+            order_number: orderNo,
+            type: type,
+            type_label: typeLabel(type),
+            customer_name: currentCustomerLabel(),
+            customer_phone: (document.getElementById('customerPhone').value || '').trim(),
+            table: tableCode || null,
+            cashier: config.cashierName || 'Cashier',
+            placed_at: now,
+            items: cart.map(function (item) {
+                return {
+                    name: item.name + (item.note ? ' (' + item.note + ')' : ''),
+                    qty: item.qty,
+                    unit_price: item.price,
+                    line_total: item.price * item.qty,
+                };
+            }),
+            subtotal: t.subtotal,
+            service_charge: t.service,
+            tax_amount: t.tax,
+            discount_amount: discount,
+            total: t.total,
+            cash_paid: numField('cashPaidInput'),
+            bkash_paid: numField('bkashPaidInput'),
+            card_paid: numField('cardPaidInput'),
+            amount_tendered: numField('amountTenderedInput'),
+            change_amount: numField('changeAmountInput'),
+            notes: (document.getElementById('orderNotes').value || '').trim(),
+        };
+    }
+
+    function submitTicketAjax(action) {
+        if (sendingOrder) return;
+        sendingOrder = true;
+        render();
+        var resumeId = document.getElementById('resumeOrderId').value;
+        var form = document.getElementById('posForm');
+        document.getElementById('posAction').value = action;
+        var body = new FormData(form);
+        body.set('action', action);
+
+        var storeUrl = form.getAttribute('action') || '/admin/pos';
+        fetch(storeUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: body,
+            credentials: 'same-origin',
+        }).then(function (res) {
+            return res.json().then(function (data) {
+                if (!res.ok) {
+                    var first = data.message || (data.errors && Object.values(data.errors)[0] && Object.values(data.errors)[0][0]) || 'Could not save order';
+                    throw new Error(first);
+                }
+                return data;
+            });
+        }).then(function (data) {
+            if (action === 'pay') {
+                dropHeldOrder(data.order && data.order.id);
+                applyNextOrderNumber(data.next_order_number, data.order && data.order.order_number);
+                startFreshTicket();
+                toast(data.message || 'Payment captured');
+                return;
+            }
+            if (action === 'save' || action === 'hold') {
+                upsertHeldOrder(data.order);
+                if (action === 'save') {
+                    applyNextOrderNumber(data.next_order_number, data.order && data.order.order_number);
+                    startFreshTicket();
+                    toast(data.message || 'Sent · POS ready for next order');
+                    return;
+                }
+            }
+            if (data.order) {
+                document.getElementById('resumeOrderId').value = data.order.id;
+                document.getElementById('orderNumberLabel').textContent = '#' + data.order.order_number;
+            }
+            lastKitchenMap = kitchenMapFromCart(cart);
+            toast(data.message || 'Order held');
+        }).catch(function (err) {
+            toast(err.message || 'Could not save. Try again.');
+        }).finally(function () {
+            sendingOrder = false;
+        });
+
+        if (action === 'pay') {
+            if (isPayFirst()) window._printTokensAfterInvoice = tokensFromCart(!!resumeId);
+            printPaidInvoice(invoiceFromCart());
+        } else if (action === 'save') {
+            printTokens(tokensFromCart(!!resumeId));
+        }
+    }
 
     document.getElementById('copyOrderBtn').addEventListener('click', function () {
         var text = (document.getElementById('orderNumberLabel').textContent || '').replace(/^#/, '').trim();
@@ -881,29 +1463,181 @@
         }
         if (!cart.length) { toast('Add items before printing due bill'); return; }
         fillDueBill();
-        if (dueBillPreview) dueBillPreview.classList.remove('hidden');
+        openSlipPreview(document.getElementById('dueBillSheet'), 'Due bill');
     }
 
-    function closeDueBillPreview() {
-        if (dueBillPreview) dueBillPreview.classList.add('hidden');
-    }
-
-    function cleanupDueBillPrint() {
-        if (dueBillShell) {
-            dueBillShell.classList.remove('printing-due-bill');
-            dueBillShell.classList.remove('printing-invoice');
-            dueBillShell.classList.remove('printing-tokens');
+    function openSlipPreview(node, title) {
+        if (!node) return;
+        var preview = document.getElementById('slipPreview');
+        var stage = document.getElementById('slipPreviewStage');
+        var titleEl = document.getElementById('slipPreviewTitle');
+        if (!preview || !stage) {
+            printIsolated(node);
+            return;
         }
-        document.body.classList.remove('printing-due-bill');
-        document.body.classList.remove('printing-invoice');
-        document.body.classList.remove('printing-tokens');
+        window._slipPreviewNode = node;
+        if (titleEl) titleEl.textContent = title || 'Slip';
+        stage.innerHTML = '';
+        var clone = node.cloneNode(true);
+        clone.removeAttribute('id');
+        clone.classList.remove('hidden');
+        clone.style.display = 'block';
+        Array.prototype.forEach.call(clone.querySelectorAll('[id]'), function (el) {
+            el.removeAttribute('id');
+        });
+        stage.appendChild(clone);
+        preview.classList.remove('hidden');
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        if (typeof window.__posRestoreExtended === 'function') window.__posRestoreExtended();
+    }
+
+    function closeSlipPreview() {
+        var preview = document.getElementById('slipPreview');
+        if (preview) preview.classList.add('hidden');
+        window._slipPreviewNode = null;
+    }
+
+    function isSlipPreviewOpen() {
+        var preview = document.getElementById('slipPreview');
+        return preview && !preview.classList.contains('hidden');
+    }
+
+    function confirmSlipPrint() {
+        if (!isSlipPreviewOpen()) return;
+        var node = window._slipPreviewNode;
+        var followTokens = window._printTokensAfterInvoice;
+        window._printTokensAfterInvoice = null;
+        closeSlipPreview();
+        if (typeof window.__posRestoreExtended === 'function') window.__posRestoreExtended();
+        printSequence(slipPrintParts(node), function () {
+            if (followTokens) printTokens(followTokens);
+        });
+    }
+
+    var slipPreviewClose = document.getElementById('slipPreviewClose');
+    var slipPreviewPrint = document.getElementById('slipPreviewPrint');
+    var slipPreviewBackdrop = document.getElementById('slipPreviewBackdrop');
+    if (slipPreviewClose) slipPreviewClose.addEventListener('click', closeSlipPreview);
+    if (slipPreviewPrint) slipPreviewPrint.addEventListener('click', confirmSlipPrint);
+    if (slipPreviewBackdrop) slipPreviewBackdrop.addEventListener('click', closeSlipPreview);
+
+    function premiumSlipCss() {
+        return '<style>'
+            + '*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#1c1410}'
+            + '.token-print-sheet,.paid-invoice-sheet,.due-bill-sheet,.due-bill-sheet--live{display:block!important;position:static!important}'
+            + '.hidden{display:none!important}'
+            + '.token-slip,.due-bill,.paid-invoice{width:72mm;margin:0 auto;padding:3mm 2mm;font-family:\'Segoe UI\',sans-serif}'
+            + '.token-slip{page-break-after:always}.token-slip:last-child{page-break-after:auto}'
+            + '.slip-crest{text-align:center;color:#b8860b;font-size:12px;letter-spacing:.45em;margin-bottom:2px}'
+            + '.slip-rule{height:3px;margin:8px 0 10px;border-top:1px solid #c4a574;border-bottom:1px solid #e8d5a8}'
+            + '.token-brand,.due-bill-brand{text-align:center;font-family:Georgia,\'Times New Roman\',serif;font-size:18px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}'
+            + '.token-tagline,.due-bill-tagline{text-align:center;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#8a7350;margin-top:2px}'
+            + '.due-bill-contact{text-align:center;font-size:10px;color:#5c4a38;margin-top:3px}'
+            + '.token-badge,.due-bill-badge{margin:8px auto;text-align:center;font-size:9px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#7a5c2e;border:1px solid #c4a574;padding:5px 10px;width:fit-content}'
+            + '.due-bill-badge{display:block;width:auto;border-radius:4px}'
+            + '.due-bill-badge.paid{color:#0f7a4a;border-color:#0f7a4a;background:#f0faf4}'
+            + '.token-number{text-align:center;font-family:Georgia,serif;font-size:34px;font-weight:700;letter-spacing:.08em;margin:4px 0 8px}'
+            + '.token-meta,.due-bill-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:10px;margin:8px 0;padding:8px 0;border-top:1px dashed #cfc3ae;border-bottom:1px dashed #cfc3ae}'
+            + '.token-meta span,.due-bill-meta span{display:block;color:#8a7350;font-size:8px;letter-spacing:.08em;text-transform:uppercase}'
+            + '.token-meta strong,.due-bill-meta strong{font-size:11px}'
+            + '.token-items{list-style:none;margin:0;padding:0;font-size:12px}'
+            + '.token-items li{display:flex;gap:8px;padding:5px 0;border-bottom:1px dotted #e2d6c4}'
+            + '.token-items .q{font-weight:800;min-width:28px;color:#7a5c2e}'
+            + '.token-items--kitchen li{font-size:13px;font-weight:700}'
+            + '.due-bill-items{width:100%;border-collapse:collapse;font-size:11px}'
+            + '.due-bill-items th{text-align:left;font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#8a7350;border-bottom:1px solid #c4a574;padding:4px 0}'
+            + '.due-bill-items td{padding:5px 0;border-bottom:1px dotted #e2d6c4;vertical-align:top}'
+            + '.due-bill-items .qty{width:28px}.due-bill-items .amt{text-align:right;white-space:nowrap}'
+            + '.due-bill-totals{margin-top:8px;font-size:12px}.due-bill-totals>div{display:flex;justify-content:space-between;padding:3px 0}'
+            + '.due-total{font-size:14px;font-weight:800;border-top:1px solid #c4a574;margin-top:6px;padding-top:6px}'
+            + '.due-bill-status{margin-top:10px;text-align:center;border:1px solid #c4a574;padding:8px;font-size:10px;letter-spacing:.06em}'
+            + '.due-bill-status.paid{border-color:#0f7a4a;color:#0f7a4a}'
+            + '.inv-pay-breakdown{margin-top:8px;font-size:11px}.inv-pay-breakdown>div{display:flex;justify-content:space-between;padding:2px 0}'
+            + '.token-note,.token-foot,.token-notes,.due-bill-foot{margin:8px 0 0;font-size:10px;text-align:center;color:#5c4a38;line-height:1.45}'
+            + '.token-notes{text-align:left;font-weight:700}'
+            + '.due-bill-foot .tiny,.tiny{font-size:9px;color:#8a7350}'
+            + '@page{size:80mm auto;margin:4mm}'
+            + '</style>';
+    }
+
+    function slipPrintParts(node) {
+        if (!node) return [];
+        if (node.classList && node.classList.contains('token-print-sheet')) {
+            var parts = [];
+            var guest = document.getElementById('customerTokenSlip');
+            var kit = document.getElementById('kitchenTokenSlip');
+            if (guest && !guest.classList.contains('hidden')) parts.push(guest);
+            if (kit && !kit.classList.contains('hidden')) parts.push(kit);
+            return parts.length ? parts : [node];
+        }
+        return [node];
+    }
+
+    function printSequence(nodes, afterAll) {
+        var list = (nodes || []).filter(function (n) { return n && !n.classList.contains('hidden'); });
+        var i = 0;
+        function next() {
+            if (i >= list.length) {
+                if (typeof afterAll === 'function') afterAll();
+                return;
+            }
+            var current = list[i];
+            i += 1;
+            printIsolated(current, next);
+        }
+        next();
+    }
+
+    function printIsolated(node, onDone) {
+        if (!node) {
+            if (typeof onDone === 'function') onDone();
+            return;
+        }
+        var iframe = document.getElementById('posSilentPrint');
+        if (!iframe) {
+            iframe = document.createElement('iframe');
+            iframe.id = 'posSilentPrint';
+            iframe.setAttribute('aria-hidden', 'true');
+            iframe.setAttribute('tabindex', '-1');
+            iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:80mm;height:10px;opacity:0;border:0;pointer-events:none;';
+            document.body.appendChild(iframe);
+        }
+        var doc = iframe.contentDocument;
+        if (!doc) {
+            if (typeof onDone === 'function') onDone();
+            return;
+        }
+        doc.open();
+        doc.write('<!DOCTYPE html><html><head><meta charset="utf-8">' + premiumSlipCss() + '</head><body>' + node.outerHTML + '</body></html>');
+        doc.close();
+        var win = iframe.contentWindow;
+        if (!win) {
+            if (typeof onDone === 'function') onDone();
+            return;
+        }
+        var finished = false;
+        window.__posPrinting = true;
+        if (window.__posWantExtended && typeof window.__posApplyExtended === 'function') {
+            window.__posApplyExtended(true);
+        }
+        function done() {
+            if (finished) return;
+            finished = true;
+            window.__posPrinting = false;
+            if (typeof window.__posRestoreExtended === 'function') window.__posRestoreExtended();
+            if (typeof onDone === 'function') onDone();
+        }
+        win.onafterprint = done;
+        try { win.print(); } catch (err) {}
+        if (window.__posWantExtended && typeof window.__posApplyExtended === 'function') {
+            window.__posApplyExtended(true);
+        }
+        done();
     }
 
     function runDueBillPrint() {
         fillDueBill();
-        if (dueBillShell) dueBillShell.classList.add('printing-due-bill');
-        document.body.classList.add('printing-due-bill');
-        window.print();
+        printIsolated(document.getElementById('dueBillSheet'));
     }
 
     function fillPaidInvoice(inv) {
@@ -977,9 +1711,7 @@
 
     function printPaidInvoice(inv) {
         fillPaidInvoice(inv);
-        if (dueBillShell) dueBillShell.classList.add('printing-invoice');
-        document.body.classList.add('printing-invoice');
-        setTimeout(function () { window.print(); }, 250);
+        openSlipPreview(document.getElementById('paidInvoiceSheet'), 'Paid invoice');
     }
 
     function fillTokens(tok) {
@@ -1031,13 +1763,17 @@
     }
 
     function printTokens(tok) {
+        if (!tok) return;
+        var kitchenOnly = !!tok.is_addition;
+        if (kitchenOnly && !(tok.kitchen_items && tok.kitchen_items.length)) {
+            toast('No new items for kitchen');
+            return;
+        }
         fillTokens(tok);
-        if (dueBillShell) dueBillShell.classList.add('printing-tokens');
-        document.body.classList.add('printing-tokens');
-        setTimeout(function () { window.print(); }, 250);
+        var customer = document.getElementById('customerTokenSlip');
+        if (customer) customer.classList.toggle('hidden', kitchenOnly);
+        openSlipPreview(document.getElementById('tokenPrintSheet'), kitchenOnly ? 'Kitchen add-on slip' : 'Guest + kitchen slip');
     }
-
-    window.addEventListener('afterprint', cleanupDueBillPrint);
 
     var closeDueBillBtn = document.getElementById('closeDueBillPreview');
     var confirmDueBillBtn = document.getElementById('confirmDueBillPrint');
@@ -1045,12 +1781,6 @@
     if (closeDueBillBtn) closeDueBillBtn.addEventListener('click', closeDueBillPreview);
     if (dueBillBackdrop) dueBillBackdrop.addEventListener('click', closeDueBillPreview);
     if (confirmDueBillBtn) confirmDueBillBtn.addEventListener('click', runDueBillPrint);
-
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && dueBillPreview && !dueBillPreview.classList.contains('hidden')) {
-            closeDueBillPreview();
-        }
-    });
 
     function typeLabel(type) {
         return ({ dinein: 'Dine-in', takeaway: 'Takeaway', delivery: 'Delivery', qr: 'QR Order', walkin: 'Walk-in' })[type] || type;
@@ -1062,8 +1792,8 @@
         var currency = restaurant.currency || '৳';
         var orderNo = (document.getElementById('orderNumberLabel').textContent || '').replace(/^#\s*/, '').trim();
         var type = document.getElementById('orderType').value || 'dinein';
-        var tableText = (document.getElementById('statTable').textContent || '—').trim();
-        var customer = (document.getElementById('statCustomer').textContent || 'Walk-in').trim();
+        var tableText = currentTableLabel();
+        var customer = currentCustomerLabel();
         var now = new Date();
         var notes = (document.getElementById('orderNotes').value || '').trim();
 
@@ -1156,57 +1886,98 @@
     var fsExit = document.getElementById('fsExitIcon');
     var shell = document.querySelector('.pos-shell');
 
-    function isFullscreen() {
-        return document.fullscreenElement || document.webkitFullscreenElement;
+    function isNativeFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement);
     }
 
-    function syncFullscreenIcons() {
-        var on = !!isFullscreen();
-        if (fsEnter) fsEnter.classList.toggle('hidden', on);
-        if (fsExit) fsExit.classList.toggle('hidden', !on);
-        if (fsBtn) fsBtn.title = on ? 'Exit full page' : 'Full page';
+    function isExtended() {
+        return typeof window.__posIsExtended === 'function' ? window.__posIsExtended() : isNativeFs();
     }
 
-    if (fsBtn && shell) {
-        fsBtn.addEventListener('click', function () {
-            if (isFullscreen()) {
-                (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-            } else if (shell.requestFullscreen) {
-                shell.requestFullscreen();
-            } else if (shell.webkitRequestFullscreen) {
-                shell.webkitRequestFullscreen();
-            }
-        });
-        document.addEventListener('fullscreenchange', syncFullscreenIcons);
-        document.addEventListener('webkitfullscreenchange', syncFullscreenIcons);
+    function enterExtended() {
+        if (typeof window.__posToggleExtended === 'function' && !isExtended()) {
+            window.__posToggleExtended();
+            return;
+        }
+    }
+
+    function leaveExtended() {
+        if (typeof window.__posLeaveExtended === 'function') {
+            window.__posLeaveExtended();
+            return;
+        }
+        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit && isNativeFs()) {
+            try { exit.call(document); } catch (err) {}
+        }
+        document.documentElement.classList.remove('pos-extended');
+        document.body.classList.remove('pos-extended');
+        if (shell) shell.classList.remove('pos-extended');
+        if (fsEnter) fsEnter.classList.remove('hidden');
+        if (fsExit) fsExit.classList.add('hidden');
+        if (fsBtn) {
+            fsBtn.title = 'Extended form';
+            fsBtn.setAttribute('aria-pressed', 'false');
+        }
     }
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'F11') {
             e.preventDefault();
-            if (fsBtn) fsBtn.click();
+            if (typeof window.__posToggleExtended === 'function') window.__posToggleExtended(e);
+            return;
         }
-    });
+        if (e.key === 'Enter' && isSlipPreviewOpen()) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            confirmSlipPrint();
+            return;
+        }
+        if (e.key !== 'Escape') return;
 
-    function tickClock() {
-        var now = new Date();
-        document.getElementById('statTime').textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    }
-    tickClock();
-    setInterval(tickClock, 30000);
+        if (isSlipPreviewOpen()) {
+            closeSlipPreview();
+            e.preventDefault();
+            return;
+        }
+
+        var notif = document.getElementById('notifPanel');
+        if (notif && !notif.classList.contains('hidden')) {
+            notif.classList.add('hidden');
+            e.preventDefault();
+            return;
+        }
+        if (dueBillPreview && !dueBillPreview.classList.contains('hidden')) {
+            closeDueBillPreview();
+            e.preventDefault();
+            return;
+        }
+        var payModal = document.getElementById('payModal');
+        if (payModal && !payModal.classList.contains('hidden')) {
+            payModal.classList.add('hidden');
+            e.preventDefault();
+            return;
+        }
+        var cartModal = document.getElementById('cartModal');
+        if (cartModal && !cartModal.classList.contains('hidden')) {
+            closeCartModal();
+            e.preventDefault();
+            return;
+        }
+        var itemModal = document.getElementById('itemModal');
+        if (itemModal && !itemModal.classList.contains('hidden')) {
+            itemModal.classList.add('hidden');
+            e.preventDefault();
+            return;
+        }
+        if (window.__posPrinting) return;
+        if (isExtended()) {
+            e.preventDefault();
+            leaveExtended();
+        }
+    }, true);
 
     applyFilters();
     setType(document.getElementById('orderType').value || 'dinein');
     render();
-
-    var initialTableId = document.getElementById('tableIdInput').value;
-    if (initialTableId && isTableOrder(document.getElementById('orderType').value) && !document.getElementById('resumeOrderId').value && !cart.length) {
-        lookupTableOrder(initialTableId, lastTableCode || '—');
-    }
-
-    if (config.tokens) {
-        printTokens(config.tokens);
-    } else if (config.invoice) {
-        printPaidInvoice(config.invoice);
-    }
 })();

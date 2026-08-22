@@ -77,19 +77,48 @@
         </label>
 
         <div class="pos-topbar-right">
-            <div class="status-online"><span class="dot"></span> Online</div>
-            <button type="button" class="icon-round" id="fullscreenBtn" title="Full page" aria-label="Toggle full page">
+            <button type="button" class="pay-first-toggle {{ ($settings->pay_first ?? false) ? 'is-on' : '' }}" id="payFirstToggle" title="Pay before kitchen receives the order" aria-pressed="{{ ($settings->pay_first ?? false) ? 'true' : 'false' }}">
+                <span class="pf-label">Pay first</span>
+                <span class="pf-switch" aria-hidden="true"></span>
+                <strong class="pf-state" id="payFirstState">{{ ($settings->pay_first ?? false) ? 'ON' : 'OFF' }}</strong>
+            </button>
+            <button type="button" class="icon-round" id="fullscreenBtn" title="Extended form" aria-label="Toggle extended form" aria-pressed="false">
                 <svg id="fsEnterIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
                 <svg id="fsExitIcon" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v3H5M16 3v3h3M8 21v-3H5M16 21v-3h3"/></svg>
             </button>
+            <label class="pos-recall">
+                <input type="search" id="recallOrderInput" placeholder="Find held order # or ID" autocomplete="off">
+                <button type="button" id="recallOrderBtn">Find</button>
+            </label>
+            <button type="button" class="hold-count-chip" id="holdCountChip" title="Held orders">
+                Hold <strong id="heldCountText">{{ $heldCount ?? $heldOrders->count() }}</strong>
+            </button>
             <div class="notif-wrap">
-                <button type="button" class="icon-round" id="notifBtn" aria-label="Notifications">
+                <button type="button" class="icon-round" id="notifBtn" aria-label="Held orders">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-                    @if ($notificationCount > 0)
-                        <span class="badge">{{ $notificationCount }}</span>
-                    @endif
+                    <span class="badge {{ ($heldCount ?? $heldOrders->count()) < 1 ? 'hidden' : '' }}" id="heldCountBadge">{{ $heldCount ?? $heldOrders->count() }}</span>
                 </button>
                 <div class="notif-panel hidden" id="notifPanel">
+                    <h4>Held orders · <span id="heldCountLabel">{{ $heldCount ?? $heldOrders->count() }}</span></h4>
+                    <div class="notif-find">
+                        <input type="search" id="heldFindInput" placeholder="Order number or ID" autocomplete="off">
+                    </div>
+                    <div id="heldOrdersWrap">
+                    @if ($heldOrders->isEmpty())
+                        <p class="notif-empty">No held orders right now.</p>
+                    @else
+                        <ul id="heldOrdersList">
+                            @foreach ($heldOrders as $held)
+                                <li>
+                                    <button type="button" class="resume-held" data-id="{{ $held->id }}">
+                                        <strong>{{ $held->order_number }}</strong>
+                                        <small>{{ ucfirst($held->type) }} · {{ $held->items->count() }} items · ৳ {{ number_format((float) $held->total, 2) }}</small>
+                                    </button>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    </div>
                     <h4>Open Orders</h4>
                     @if (($openOrders ?? collect())->isEmpty())
                         <p class="notif-empty">No open kitchen orders.</p>
@@ -104,21 +133,6 @@
                                             · {{ $open->items->count() }} items
                                             · ৳ {{ number_format((float) $open->total, 2) }}
                                         </small>
-                                    </button>
-                                </li>
-                            @endforeach
-                        </ul>
-                    @endif
-                    <h4 style="margin-top:12px">Held Orders</h4>
-                    @if ($heldOrders->isEmpty())
-                        <p class="notif-empty">No held orders right now.</p>
-                    @else
-                        <ul>
-                            @foreach ($heldOrders as $held)
-                                <li>
-                                    <button type="button" class="resume-held" data-id="{{ $held->id }}">
-                                        <strong>{{ $held->order_number }}</strong>
-                                        <small>{{ ucfirst($held->type) }} · {{ $held->items->count() }} items · ৳ {{ number_format((float) $held->total, 2) }}</small>
                                     </button>
                                 </li>
                             @endforeach
@@ -143,7 +157,7 @@
 
     <form class="pos-body" method="POST" action="{{ route('admin.pos.store') }}" id="posForm">
         @csrf
-        <input type="hidden" name="action" id="posAction" value="pay">
+        <input type="hidden" name="pos_action" id="posAction" value="pay">
         <input type="hidden" name="type" id="orderType" value="{{ $type }}">
         <input type="hidden" name="payment_method" id="paymentMethod" value="cash">
         <input type="hidden" name="cash_paid" id="cashPaidInput" value="0">
@@ -213,8 +227,8 @@
                             <option value="price-desc">Price: High to Low</option>
                             <option value="name">Name A–Z</option>
                         </select>
-                        <button type="button" class="filter-settings" title="Filter settings" aria-label="Filter settings">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                        <button type="button" class="filter-settings" id="refreshMenuBtn" title="Refresh menu from admin" aria-label="Refresh menu">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
                         </button>
                     </div>
                 </div>
@@ -303,7 +317,7 @@
                 <span>Items</span>
                 <div class="cart-head-actions">
                     <span class="cart-count" id="cartCountLabel">0 items</span>
-                    <button type="button" class="cart-expand-btn" id="expandCartBtn" title="View all items" aria-label="Expand cart" disabled>
+                    <button type="button" class="cart-expand-btn" id="expandCartBtn" title="View all items" aria-label="Expand cart">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
                     </button>
                 </div>
@@ -390,7 +404,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
                             Hold
                         </button>
-                        <button type="submit" data-action="save" id="saveBtn" title="Send to kitchen + print customer & kitchen tokens">
+                        <button type="submit" data-action="save" id="saveBtn" title="Print slips now · save as unpaid hold until Pay">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                             Send
                         </button>
@@ -403,58 +417,6 @@
             </div>
         </aside>
     </form>
-
-    <footer class="pos-statusbar">
-        <div class="stat-card">
-            <div class="ico orange">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg>
-            </div>
-            <div class="data">
-                <small>Items</small>
-                <strong id="statItems">0</strong>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="ico green">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-            </div>
-            <div class="data">
-                <small>Total</small>
-                <strong id="statTotal">৳ 0.00</strong>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="ico">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            </div>
-            <div class="data">
-                <small>Customer</small>
-                <strong id="statCustomer">Walk-in</strong>
-            </div>
-            <button type="button" class="action-btn" id="customerPickerBtn" title="Select customer">+</button>
-        </div>
-        <div class="stat-card dinein-only {{ in_array($type, ['takeaway', 'delivery'], true) ? 'hidden' : '' }}" id="statTableCard">
-            <div class="ico">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 4v4M16 4v4"/></svg>
-            </div>
-            <div class="data">
-                <small>Table</small>
-                <strong id="statTable">No seat</strong>
-            </div>
-            <button type="button" class="action-btn" id="tablePickerBtn" title="Change table">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-            </button>
-        </div>
-        <div class="stat-card">
-            <div class="ico">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            </div>
-            <div class="data">
-                <small>Time</small>
-                <strong id="statTime">--:-- --</strong>
-            </div>
-        </div>
-    </footer>
 
     {{-- Due bill preview — must live inside .pos-shell for fullscreen mode --}}
     <div class="due-bill-preview hidden" id="dueBillPreview" role="dialog" aria-modal="true" aria-label="Due bill preview">
@@ -474,13 +436,15 @@
                 <div id="dueBillSheet" class="due-bill-sheet due-bill-sheet--live">
                     <div class="due-bill">
                         <header class="due-bill-head">
+                            <div class="slip-crest">✦</div>
                             <div class="due-bill-brand" id="billRestaurantName">{{ $restaurant['name'] ?? 'Bynnas Restora' }}</div>
                             <div class="due-bill-tagline" id="billTagline">{{ $restaurant['tagline'] ?? '' }}</div>
+                            <div class="slip-rule"></div>
                             <div class="due-bill-contact" id="billAddress">{{ $restaurant['address'] ?? '' }}</div>
                             <div class="due-bill-contact" id="billPhone"></div>
                         </header>
 
-                        <div class="due-bill-badge">DUE BILL</div>
+                        <div class="due-bill-badge">Due bill</div>
 
                         <div class="due-bill-meta">
                             <div><span>Order</span><strong id="billOrderNo">—</strong></div>
@@ -532,33 +496,38 @@
     {{-- Dual tokens: customer + kitchen (auto-print after Send) --}}
     <div id="tokenPrintSheet" class="token-print-sheet" aria-hidden="true">
         <div class="token-slip token-slip--customer" id="customerTokenSlip">
+            <div class="slip-crest">✦</div>
             <div class="token-brand">{{ $restaurant['name'] ?? 'Bynnas Restora' }}</div>
-            <div class="token-badge">CUSTOMER TOKEN</div>
+            <div class="token-tagline">Fine dining · Hospitality</div>
+            <div class="slip-rule"></div>
+            <div class="token-badge">Guest token</div>
             <div class="token-number" id="tokCustomerNo">—</div>
             <div class="token-meta">
                 <div><span>Order</span><strong id="tokCustomerOrder">—</strong></div>
                 <div><span>Seat</span><strong id="tokCustomerSeat">No seat yet</strong></div>
-                <div><span>Type</span><strong id="tokCustomerType">—</strong></div>
+                <div><span>Service</span><strong id="tokCustomerType">—</strong></div>
                 <div><span>Time</span><strong id="tokCustomerTime">—</strong></div>
             </div>
             <ul class="token-items" id="tokCustomerItems"></ul>
-            <p class="token-note">Keep this token. Show it when receiving food or paying the bill.</p>
+            <div class="slip-rule"></div>
+            <p class="token-note">Please keep this token. Present it when collecting your order or settling the bill.</p>
             <p class="token-foot" id="tokCustomerFoot"></p>
         </div>
 
         <div class="token-slip token-slip--kitchen" id="kitchenTokenSlip">
-            <div class="token-brand">KITCHEN</div>
+            <div class="token-brand kitchen-brand">Kitchen</div>
             <div class="token-badge" id="tokKitchenBadge">NEW ORDER</div>
             <div class="token-number" id="tokKitchenNo">—</div>
             <div class="token-meta">
                 <div><span>Order</span><strong id="tokKitchenOrder">—</strong></div>
                 <div><span>Seat</span><strong id="tokKitchenSeat">No seat yet</strong></div>
-                <div><span>Type</span><strong id="tokKitchenType">—</strong></div>
+                <div><span>Service</span><strong id="tokKitchenType">—</strong></div>
                 <div><span>Time</span><strong id="tokKitchenTime">—</strong></div>
             </div>
             <ul class="token-items token-items--kitchen" id="tokKitchenItems"></ul>
             <p class="token-notes" id="tokKitchenNotes"></p>
-            <p class="token-foot">Prepare &amp; call waiter when ready</p>
+            <div class="slip-rule"></div>
+            <p class="token-foot">Prepare · pass · call waiter</p>
         </div>
     </div>
 
@@ -566,12 +535,14 @@
     <div id="paidInvoiceSheet" class="paid-invoice-sheet" aria-hidden="true">
         <div class="due-bill paid-invoice">
             <header class="due-bill-head">
+                <div class="slip-crest">✦</div>
                 <div class="due-bill-brand" id="invRestaurantName">{{ $restaurant['name'] ?? 'Bynnas Restora' }}</div>
                 <div class="due-bill-tagline" id="invTagline">{{ $restaurant['tagline'] ?? '' }}</div>
+                <div class="slip-rule"></div>
                 <div class="due-bill-contact" id="invAddress">{{ $restaurant['address'] ?? '' }}</div>
                 <div class="due-bill-contact" id="invPhone"></div>
             </header>
-            <div class="due-bill-badge paid">PAID INVOICE</div>
+            <div class="due-bill-badge paid">Paid invoice</div>
             <div class="due-bill-meta">
                 <div><span>Invoice</span><strong id="invOrderNo">—</strong></div>
                 <div><span>Date</span><strong id="invDate">—</strong></div>
@@ -612,13 +583,31 @@
 
     <div class="pos-toast hidden" id="posToast"></div>
 
+    <div class="slip-preview hidden" id="slipPreview" role="dialog" aria-modal="true" aria-label="Slip preview">
+        <div class="slip-preview-backdrop" id="slipPreviewBackdrop"></div>
+        <div class="slip-preview-panel">
+            <div class="slip-preview-toolbar">
+                <div>
+                    <strong id="slipPreviewTitle">Slip</strong>
+                    <small>Look over the slip, then press Enter to print</small>
+                </div>
+                <div class="slip-preview-actions">
+                    <button type="button" id="slipPreviewClose">Close</button>
+                    <button type="button" class="primary" id="slipPreviewPrint">Print</button>
+                </div>
+            </div>
+            <div class="slip-preview-scroll" id="slipPreviewStage"></div>
+            <p class="slip-preview-hint">Enter = print &nbsp;·&nbsp; Esc = close</p>
+        </div>
+    </div>
+
     {{-- All modals must live inside .pos-shell so they appear in fullscreen --}}
     <div class="pos-overlay hidden" id="cartModal">
         <div class="pos-modal cart-modal">
             <div class="cart-modal-head">
                 <div>
                     <h3>Order items</h3>
-                    <p id="cartModalCount">0 items</p>
+                    <p id="cartModalCount">0 items · add a note on any item</p>
                 </div>
                 <button type="button" class="cart-modal-close" id="closeCartModal" aria-label="Close">&times;</button>
             </div>
@@ -657,67 +646,78 @@
 
     <div class="pos-overlay hidden" id="payModal">
         <div class="pos-modal pay-modal">
-            <h3>Complete Payment</h3>
-
-            <div class="pay-due-box">
-                <span>Amount Due</span>
-                <strong id="payDueAmount">৳ 0.00</strong>
-            </div>
-
-            <div class="pay-quick">
-                <button type="button" data-fill="cash">All Cash</button>
-                <button type="button" data-fill="bkash">All bKash</button>
-                <button type="button" data-fill="card">All Card</button>
-            </div>
-
-            <p class="pay-hint">Enter bKash / Card for partial pay. Cash toward bill fills automatically. Change = cash received − cash toward bill.</p>
-
-            <div class="pay-split-grid">
-                <label>
-                    <span>Cash toward bill</span>
-                    <input type="number" class="field" id="payCash" min="0" step="0.01" placeholder="0.00" readonly tabindex="-1">
-                </label>
-                <label>
-                    <span>bKash</span>
-                    <input type="number" class="field" id="payBkash" min="0" step="0.01" placeholder="0.00">
-                </label>
-                <label>
-                    <span>Card</span>
-                    <input type="number" class="field" id="payCard" min="0" step="0.01" placeholder="0.00">
-                </label>
-            </div>
-
-            <div class="pay-balance-row">
-                <span>Paid (allocated)</span>
-                <strong id="payAllocated">৳ 0.00</strong>
-                <span>Still due</span>
-                <strong id="payRemaining">৳ 0.00</strong>
-            </div>
-
-            <div class="pay-tender-grid">
-                <label>
-                    <span>Cash received from customer</span>
-                    <input type="number" class="field" id="payTendered" min="0" step="0.01" placeholder="0.00">
-                </label>
-                <div class="pay-change-box">
-                    <span>Change to return</span>
-                    <strong id="payChange">৳ 0.00</strong>
+            <div class="pay-modal-head">
+                <div>
+                    <h3>Collect payment</h3>
+                    <p>Choose a method, then confirm</p>
                 </div>
+                <button type="button" class="cart-modal-close" id="cancelPayModal" aria-label="Close">&times;</button>
             </div>
+            <div class="pay-modal-body">
+                <div class="pay-due-box">
+                    <span>Amount due</span>
+                    <strong id="payDueAmount">৳ 0.00</strong>
+                </div>
 
-            <p class="pay-error hidden" id="payError"></p>
+                <div class="pay-quick">
+                    <button type="button" data-fill="cash">Cash</button>
+                    <button type="button" data-fill="bkash">bKash</button>
+                    <button type="button" data-fill="card">Card</button>
+                </div>
 
-            <div class="pay-customer-fields">
-                <label class="field-label">Customer name (optional)</label>
-                <input type="text" class="field" id="modalCustomerName" placeholder="e.g. Walk-in / Guest name" autocomplete="name">
-                <label class="field-label" style="margin-top:10px">Phone number (optional)</label>
-                <input type="tel" class="field" id="modalCustomerPhone" placeholder="e.g. 01XXXXXXXXX" autocomplete="tel">
+                <div class="pay-split-grid">
+                    <label>
+                        <span>Cash on bill</span>
+                        <input type="number" class="field" id="payCash" min="0" step="0.01" placeholder="0.00" readonly tabindex="-1">
+                    </label>
+                    <label>
+                        <span>bKash</span>
+                        <input type="number" class="field" id="payBkash" min="0" step="0.01" placeholder="0.00">
+                    </label>
+                    <label>
+                        <span>Card</span>
+                        <input type="number" class="field" id="payCard" min="0" step="0.01" placeholder="0.00">
+                    </label>
+                </div>
+
+                <div class="pay-balance-row">
+                    <span>Allocated</span>
+                    <strong id="payAllocated">৳ 0.00</strong>
+                    <span>Still due</span>
+                    <strong id="payRemaining">৳ 0.00</strong>
+                </div>
+
+                <div class="pay-tender-grid">
+                    <label>
+                        <span>Cash received</span>
+                        <input type="number" class="field" id="payTendered" min="0" step="0.01" placeholder="0.00">
+                    </label>
+                    <div class="pay-change-box">
+                        <span>Change</span>
+                        <strong id="payChange">৳ 0.00</strong>
+                    </div>
+                </div>
+
+                <p class="pay-error hidden" id="payError"></p>
+
+                <div class="pay-guest-grid">
+                    <label>
+                        <span>Guest name</span>
+                        <input type="text" class="field" id="modalCustomerName" placeholder="Walk-in" autocomplete="name">
+                    </label>
+                    <label>
+                        <span>Phone</span>
+                        <input type="tel" class="field" id="modalCustomerPhone" placeholder="01XXXXXXXXX" autocomplete="tel">
+                    </label>
+                </div>
+                <label class="pay-notes">
+                    <span>Note</span>
+                    <textarea class="field" id="modalNotes" placeholder="Optional kitchen / bill note"></textarea>
+                </label>
             </div>
-            <label class="field-label" style="margin-top:10px">Notes (optional)</label>
-            <textarea class="field" id="modalNotes" style="height:64px;padding:10px 12px;resize:vertical;" placeholder="Add order note..."></textarea>
-            <div class="modal-actions">
-                <button type="button" id="cancelPayModal">Cancel</button>
-                <button type="button" class="primary" id="confirmPayBtn">Pay & Print Invoice</button>
+            <div class="pay-modal-foot">
+                <button type="button" id="cancelPayModalBtn">Cancel</button>
+                <button type="button" class="primary" id="confirmPayBtn">Pay &amp; print</button>
             </div>
         </div>
     </div>
@@ -777,16 +777,118 @@
     heldOrders: @json($heldOrdersPayload),
     openOrders: @json($openOrdersPayload ?? []),
     tableOrderUrl: @json(route('admin.pos.table-order')),
+    findOrderUrl: @json(route('admin.pos.find-order')),
+    catalogUrl: @json(route('admin.pos.catalog')),
     nextOrderNumber: @json($nextOrderNumber),
     vatRate: {{ (float) ($taxSettings['vat_rate'] ?? 0) }},
     serviceRate: {{ (float) ($taxSettings['service_charge_rate'] ?? 0) }},
     taxName: @json($taxSettings['tax_name'] ?? 'VAT'),
     applyServiceDefault: false,
     applyTaxDefault: false,
+    payFirst: @json((bool) ($settings->pay_first ?? false)),
+    payFirstUrl: @json(route('admin.settings.pay-first')),
     restaurant: @json($posRestaurant),
     cashierName: @json($user->name),
     invoice: @json(session('invoice')),
     tokens: @json(session('tokens'))
 };</script>
+<script>
+(function () {
+    function fsEl() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+    function applyExtended(on) {
+        document.documentElement.classList.toggle('pos-extended', on);
+        document.body.classList.toggle('pos-extended', on);
+        var shell = document.querySelector('.pos-shell');
+        if (shell) shell.classList.toggle('pos-extended', on);
+        var enter = document.getElementById('fsEnterIcon');
+        var exit = document.getElementById('fsExitIcon');
+        var btn = document.getElementById('fullscreenBtn');
+        if (enter) enter.classList.toggle('hidden', on);
+        if (exit) exit.classList.toggle('hidden', !on);
+        if (btn) {
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.title = on ? 'Exit extended (Esc)' : 'Extended form';
+        }
+    }
+    window.__posWantExtended = false;
+    window.__posPrinting = false;
+    window.__posApplyExtended = applyExtended;
+    window.__posIsExtended = function () {
+        return !!(fsEl() || document.documentElement.classList.contains('pos-extended') || window.__posWantExtended);
+    };
+    window.__posEnterExtended = function () {
+        window.__posWantExtended = true;
+        applyExtended(true);
+        if (fsEl()) return;
+        var node = document.documentElement;
+        var req = node.requestFullscreen || node.webkitRequestFullscreen;
+        if (typeof req !== 'function') return;
+        try {
+            var result = req.call(node);
+            if (result && typeof result.then === 'function') {
+                result.then(function () { applyExtended(true); }).catch(function () { applyExtended(true); });
+            }
+        } catch (err) {
+            applyExtended(true);
+        }
+    };
+    window.__posLeaveExtended = function () {
+        window.__posWantExtended = false;
+        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit && fsEl()) {
+            try { exit.call(document); } catch (err) {}
+        }
+        applyExtended(false);
+    };
+    window.__posToggleExtended = function (e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (window.__posWantExtended || fsEl() || document.documentElement.classList.contains('pos-extended')) {
+            window.__posLeaveExtended();
+            return;
+        }
+        window.__posEnterExtended();
+    };
+    window.__posRestoreExtended = function () {
+        if (!window.__posWantExtended) return;
+        applyExtended(true);
+        if (fsEl()) return;
+        var node = document.documentElement;
+        var req = node.requestFullscreen || node.webkitRequestFullscreen;
+        if (typeof req !== 'function') return;
+        try {
+            var result = req.call(node);
+            if (result && typeof result.then === 'function') {
+                result.catch(function () { applyExtended(true); });
+            }
+        } catch (err) {}
+    };
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest || !e.target.closest('#fullscreenBtn')) return;
+        window.__posToggleExtended(e);
+    });
+    document.addEventListener('fullscreenchange', function () {
+        if (fsEl()) {
+            applyExtended(true);
+            return;
+        }
+        if (window.__posWantExtended || window.__posPrinting) {
+            applyExtended(true);
+            return;
+        }
+        applyExtended(false);
+    });
+    document.addEventListener('webkitfullscreenchange', function () {
+        if (fsEl()) {
+            applyExtended(true);
+            return;
+        }
+        if (window.__posWantExtended || window.__posPrinting) {
+            applyExtended(true);
+            return;
+        }
+        applyExtended(false);
+    });
+})();
+</script>
 <script src="{{ $posRoot }}/js/pos-app.js?v={{ $posJsVer }}"></script>
 @endpush

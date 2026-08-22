@@ -9,7 +9,7 @@ class SiteSetting extends Model
     protected $fillable = [
         'restaurant_name', 'tagline', 'phone', 'email', 'address_line1', 'address_line2',
         'city', 'opening_hours', 'currency_symbol', 'timezone', 'reservations_enabled',
-        'online_ordering_enabled', 'footer_note',
+        'online_ordering_enabled', 'pay_first', 'footer_note',
         'logo_url', 'hero_bg_url', 'hero_image_url', 'hero_eyebrow', 'hero_headline',
         'hero_headline_accent', 'hero_description',
         'popular_eyebrow', 'popular_title', 'popular_subtitle',
@@ -28,6 +28,7 @@ class SiteSetting extends Model
         return [
             'reservations_enabled' => 'boolean',
             'online_ordering_enabled' => 'boolean',
+            'pay_first' => 'boolean',
             'story_points' => 'array',
             'hero_features' => 'array',
             'value_props' => 'array',
@@ -150,6 +151,7 @@ class SiteSetting extends Model
             'timezone' => 'Asia/Dhaka',
             'reservations_enabled' => true,
             'online_ordering_enabled' => true,
+            'pay_first' => false,
             'footer_note' => 'Delicious meals made with fresh ingredients and passion.',
         ], static::homepageDefaults()));
     }
