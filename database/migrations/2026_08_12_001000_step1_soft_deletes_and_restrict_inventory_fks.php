@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -35,74 +36,31 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        // recipe_ingredients: keep recipe/item history — block hard deletes
-        Schema::table('recipe_ingredients', function (Blueprint $table) {
-            $table->dropForeign(['recipe_id']);
-            $table->dropForeign(['inventory_item_id']);
-            $table->foreign('recipe_id')->references('id')->on('recipes')->restrictOnDelete();
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->restrictOnDelete();
-        });
-
-        // purchase_orders → suppliers: restrict (soft-delete supplier instead)
-        Schema::table('purchase_orders', function (Blueprint $table) {
-            $table->dropForeign(['supplier_id']);
-            $table->foreign('supplier_id')->references('id')->on('suppliers')->restrictOnDelete();
-        });
-
-        // purchase_order_items: preserve PO line history
-        Schema::table('purchase_order_items', function (Blueprint $table) {
-            $table->dropForeign(['purchase_order_id']);
-            $table->dropForeign(['inventory_item_id']);
-            $table->foreign('purchase_order_id')->references('id')->on('purchase_orders')->restrictOnDelete();
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->restrictOnDelete();
-        });
-
-        // stock_transfers: preserve transfer audit trail
-        Schema::table('stock_transfers', function (Blueprint $table) {
-            $table->dropForeign(['inventory_item_id']);
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->restrictOnDelete();
-        });
-
-        // wastage_records: preserve cost-impact history
-        Schema::table('wastage_records', function (Blueprint $table) {
-            $table->dropForeign(['inventory_item_id']);
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->restrictOnDelete();
-        });
-
-        // inventory_items.supplier_id already nullOnDelete — keep that policy
+        $this->replaceForeignKey('recipe_ingredients', 'recipe_id', 'id', 'recipes', 'restrict');
+        $this->replaceForeignKey('recipe_ingredients', 'inventory_item_id', 'id', 'inventory_items', 'restrict');
+        $this->replaceForeignKey('purchase_orders', 'supplier_id', 'id', 'suppliers', 'restrict');
+        $this->replaceForeignKey('purchase_order_items', 'purchase_order_id', 'id', 'purchase_orders', 'restrict');
+        $this->replaceForeignKey('purchase_order_items', 'inventory_item_id', 'id', 'inventory_items', 'restrict');
+        $this->replaceForeignKey('stock_transfers', 'inventory_item_id', 'id', 'inventory_items', 'restrict');
+        $this->replaceForeignKey('wastage_records', 'inventory_item_id', 'id', 'inventory_items', 'restrict');
     }
 
     public function down(): void
     {
+        $this->replaceForeignKey('wastage_records', 'inventory_item_id', 'id', 'inventory_items', 'cascade');
+        $this->replaceForeignKey('stock_transfers', 'inventory_item_id', 'id', 'inventory_items', 'cascade');
+        $this->replaceForeignKey('purchase_order_items', 'purchase_order_id', 'id', 'purchase_orders', 'cascade');
+        $this->replaceForeignKey('purchase_order_items', 'inventory_item_id', 'id', 'inventory_items', 'cascade');
+        $this->replaceForeignKey('purchase_orders', 'supplier_id', 'id', 'suppliers', 'cascade');
+        $this->replaceForeignKey('recipe_ingredients', 'recipe_id', 'id', 'recipes', 'cascade');
+        $this->replaceForeignKey('recipe_ingredients', 'inventory_item_id', 'id', 'inventory_items', 'cascade');
+
         Schema::table('wastage_records', function (Blueprint $table) {
-            $table->dropForeign(['inventory_item_id']);
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->cascadeOnDelete();
             $table->dropSoftDeletes();
-        });
-
-        Schema::table('stock_transfers', function (Blueprint $table) {
-            $table->dropForeign(['inventory_item_id']);
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->cascadeOnDelete();
-        });
-
-        Schema::table('purchase_order_items', function (Blueprint $table) {
-            $table->dropForeign(['purchase_order_id']);
-            $table->dropForeign(['inventory_item_id']);
-            $table->foreign('purchase_order_id')->references('id')->on('purchase_orders')->cascadeOnDelete();
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->cascadeOnDelete();
         });
 
         Schema::table('purchase_orders', function (Blueprint $table) {
-            $table->dropForeign(['supplier_id']);
-            $table->foreign('supplier_id')->references('id')->on('suppliers')->cascadeOnDelete();
             $table->dropSoftDeletes();
-        });
-
-        Schema::table('recipe_ingredients', function (Blueprint $table) {
-            $table->dropForeign(['recipe_id']);
-            $table->dropForeign(['inventory_item_id']);
-            $table->foreign('recipe_id')->references('id')->on('recipes')->cascadeOnDelete();
-            $table->foreign('inventory_item_id')->references('id')->on('inventory_items')->cascadeOnDelete();
         });
 
         Schema::table('recipes', function (Blueprint $table) {
@@ -115,6 +73,50 @@ return new class extends Migration
 
         Schema::table('suppliers', function (Blueprint $table) {
             $table->dropSoftDeletes();
+        });
+    }
+
+    private function replaceForeignKey(
+        string $table,
+        string $column,
+        string $references,
+        string $on,
+        string $onDelete,
+    ): void {
+        $this->dropForeignKeyIfExists($table, $column);
+
+        Schema::table($table, function (Blueprint $blueprint) use ($column, $references, $on, $onDelete) {
+            $foreign = $blueprint->foreign($column)->references($references)->on($on);
+
+            match ($onDelete) {
+                'cascade' => $foreign->cascadeOnDelete(),
+                'null' => $foreign->nullOnDelete(),
+                default => $foreign->restrictOnDelete(),
+            };
+        });
+    }
+
+    private function dropForeignKeyIfExists(string $table, string $column): void
+    {
+        $database = Schema::getConnection()->getDatabaseName();
+
+        $row = DB::selectOne(
+            'SELECT CONSTRAINT_NAME AS name
+             FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = ?
+               AND TABLE_NAME = ?
+               AND COLUMN_NAME = ?
+               AND REFERENCED_TABLE_NAME IS NOT NULL
+             LIMIT 1',
+            [$database, $table, $column],
+        );
+
+        if (! $row?->name) {
+            return;
+        }
+
+        Schema::table($table, function (Blueprint $blueprint) use ($row) {
+            $blueprint->dropForeign($row->name);
         });
     }
 };
