@@ -1,0 +1,60 @@
+{
+  "_bootstrap-DUr89oQr.js": {
+    "file": "assets/bootstrap-DUr89oQr.js",
+    "name": "bootstrap"
+  },
+  "resources/css/admin.css": {
+    "file": "assets/admin-0m_bCGTb.css",
+    "src": "resources/css/admin.css",
+    "isEntry": true,
+    "name": "admin",
+    "names": [
+      "admin.css"
+    ]
+  },
+  "resources/css/app.css": {
+    "file": "assets/app-D_YeAJo-.css",
+    "src": "resources/css/app.css",
+    "isEntry": true,
+    "name": "app",
+    "names": [
+      "app.css"
+    ]
+  },
+  "resources/css/pos.css": {
+    "file": "assets/pos-BzVzxR7P.css",
+    "src": "resources/css/pos.css",
+    "isEntry": true,
+    "name": "pos",
+    "names": [
+      "pos.css"
+    ]
+  },
+  "resources/js/app.js": {
+    "file": "assets/app-CBZsGb2n.js",
+    "name": "app",
+    "src": "resources/js/app.js",
+    "isEntry": true,
+    "imports": [
+      "_bootstrap-DUr89oQr.js"
+    ]
+  },
+  "resources/js/app.jsx": {
+    "file": "assets/app-BZTsJjQT.js",
+    "name": "app",
+    "src": "resources/js/app.jsx",
+    "isEntry": true,
+    "imports": [
+      "_bootstrap-DUr89oQr.js"
+    ],
+    "css": [
+      "assets/app-D_YeAJo-.css"
+    ]
+  },
+  "resources/js/pos-app.js": {
+    "file": "assets/pos-app-DXprVhZH.js",
+    "name": "pos-app",
+    "src": "resources/js/pos-app.js",
+    "isEntry": true
+  }
+}
